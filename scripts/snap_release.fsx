@@ -76,11 +76,11 @@ if not (String.IsNullOrEmpty githubRef) then
             Console.WriteLine "Automatic login about to begin..."
             File.WriteAllText(snapcraftLoginFileName, snapcraftLogin)
 elif not (String.IsNullOrEmpty gitlabRef) then
-    if not (gitlabRef.StartsWith tagsPrefix) then
-        Console.WriteLine (sprintf "No tag being set (CI_COMMIT_REF_SLUG=%s), skipping release." gitlabRef)
-        Environment.Exit 0
+    let gitTag = Environment.GetEnvironmentVariable "CI_COMMIT_TAG"
 
-    let gitTag = gitlabRef.Substring tagsPrefix.Length
+    if String.IsNullOrEmpty gitTag then
+        Console.WriteLine (sprintf "No tag being set (CI_COMMIT_TAG=%s), skipping release." gitTag)
+        Environment.Exit 0
 
     if not (snapFile.FullName.Contains gitTag) then
         Console.Error.WriteLine (
