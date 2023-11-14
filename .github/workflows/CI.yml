@@ -576,6 +576,7 @@ jobs:
     - name: Upload snap package to Snap Store
       env:
         SNAPCRAFT_LOGIN: ${{ secrets.SNAPCRAFT_LOGIN }}
+        OVERRIDE_SNAP_VERSION: true
       run: |
         sudo apt update
         ./scripts/snap_release.sh beta

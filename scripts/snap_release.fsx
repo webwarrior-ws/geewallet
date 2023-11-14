@@ -159,6 +159,24 @@ let snapPush =
         | _ ->
             failwith "Invalid arguments"
 
+    let overrideVersion = Environment.GetEnvironmentVariable "OVERRIDE_SNAP_VERSION"
+    if not (String.IsNullOrWhiteSpace overrideVersion) then
+        let snapcraftDir = Path.Combine(FsxHelper.RootDir.FullName, "snap", "snapcraft.yaml")
+        let readSnapcraftYaml = File.ReadAllText (snapcraftDir)
+        let matchVersion = Regex.Match(readSnapcraftYaml, @"(?<=version:\s')[\d\.]+(?=')")
+        if matchVersion.Success then
+            let versionList = matchVersion.Value.Split('.')
+            Array.set versionList 1 ((int versionList.[1] + 2).ToString())
+            Process.Execute(
+                {
+                    Command = "snapcraftctl"
+                    Arguments = sprintf "set-version %s" (String.Join(".", versionList))
+                }, Echo.All
+            )
+            |> ignore
+        else
+            failwithf "Snap version not found in: '%s'" snapcraftDir
+
     Process.Execute(
         {
             Command = "snapcraft"
