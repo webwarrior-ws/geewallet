@@ -490,10 +490,31 @@ jobs:
       if: github.event_name == 'pull_request'
       run: ./conventions/commitlint.sh --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
+  prepare:
+    name: (Meta) Prepare release
+    needs: conventions
+    runs-on: ubuntu-22.04
+    container:
+      image: "ubuntu:22.04"
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
   snap_pkg:
 
     needs:
-    - conventions
+    - prepare
 
     runs-on: ubuntu-22.04
     steps:
@@ -514,6 +535,14 @@ jobs:
       run: |
         # retry 3 times because of flakey nuget; TODO: remove retry when we migrate to .NET6 (removing LEGACY_FRAMEWORK support)
         ./scripts/snap_build.sh || ./scripts/snap_build.sh || ./scripts/snap_build.sh || ./scripts/snap_build.sh
+
+    - name: Find the snap file's path and name
+      id: find_snap_file
+      run: |
+        FILEPATH=$(ls *.snap)
+        FILENAME=$(basename $FILEPATH)
+        echo "file_path=$FILEPATH" >> $GITHUB_OUTPUT
+        echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
 
     - name: Install snap
       # dangerous because it's a local snap (not one from the SnapStore)
@@ -538,7 +567,7 @@ jobs:
   snap_pkg_beta:
 
     needs:
-    - conventions
+    - prepare
 
     runs-on: ubuntu-22.04
     steps:
@@ -564,6 +593,14 @@ jobs:
       run: |
         # retry 3 times because of flakey nuget; TODO: remove retry when we migrate to .NET6 (removing LEGACY_FRAMEWORK support)
         ./scripts/snap_build.sh --native-segwit || ./scripts/snap_build.sh --native-segwit || ./scripts/snap_build.sh --native-segwit || ./scripts/snap_build.sh --native-segwit
+
+    - name: Find the snap file's path and name
+      id: find_snap_beta_file
+      run: |
+        FILEPATH=$(ls *.snap)
+        FILENAME=$(basename $FILEPATH)
+        echo "file_path=$FILEPATH" >> $GITHUB_OUTPUT
+        echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
 
     - name: Install snap
       # dangerous because it's a local snap (not one from the SnapStore)
