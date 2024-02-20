@@ -564,6 +564,18 @@ jobs:
         sudo apt update
         ./scripts/snap_release.sh
 
+    - name: Upload snap package As Release Asset
+      id: upload-snap-asset
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.prepare.outputs.upload_url }}
+        asset_path: ${{ steps.find_snap_file.outputs.file_path }}
+        asset_name: ${{ steps.find_snap_file.outputs.file_name }}
+        asset_content_type: application/octet-stream
+
   snap_pkg_beta:
 
     needs:
@@ -621,3 +633,15 @@ jobs:
       run: |
         sudo apt update
         ./scripts/snap_release.sh beta
+
+    - name: Upload snap beta package As Release Asset
+      id: upload-snap-beta-asset
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.prepare.outputs.upload_url }}
+        asset_path: ${{ steps.find_snap_beta_file.outputs.file_path }}
+        asset_name: ${{ steps.find_snap_beta_file.outputs.file_name }}
+        asset_content_type: application/octet-stream
