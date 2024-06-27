@@ -433,21 +433,28 @@ module Account =
 
         let btcMinerFee = txMetadata.Fee
 
-        let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account txMetadata.Inputs destination amount
+        if destination.StartsWith SilentPaymentAddress.MainNetPrefix ||
+           destination.StartsWith SilentPaymentAddress.MainNetPrefix then
+            // TODO: manually create SilentPayment transaction and sign it
+            // what if we fail to create a transaction because we can't select coins
+            // due to additional restirctions (see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs) ?
+            raise <| NotImplementedException()
+        else
+            let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account txMetadata.Inputs destination amount
 
-        finalTransactionBuilder.AddKeys privateKey |> ignore
-        finalTransactionBuilder.SendFees (Money.Satoshis btcMinerFee.EstimatedFeeInSatoshis)
-        |> ignore<TransactionBuilder>
+            finalTransactionBuilder.AddKeys privateKey |> ignore
+            finalTransactionBuilder.SendFees (Money.Satoshis btcMinerFee.EstimatedFeeInSatoshis)
+            |> ignore<TransactionBuilder>
 
-        let finalTransaction = finalTransactionBuilder.BuildTransaction true
-        let transCheckResultAfterSigning = finalTransaction.Check()
-        if (transCheckResultAfterSigning <> TransactionCheckResult.Success) then
-            failwith <| SPrintF1 "Transaction check failed after signing with %A" transCheckResultAfterSigning
+            let finalTransaction = finalTransactionBuilder.BuildTransaction true
+            let transCheckResultAfterSigning = finalTransaction.Check()
+            if (transCheckResultAfterSigning <> TransactionCheckResult.Success) then
+                failwith <| SPrintF1 "Transaction check failed after signing with %A" transCheckResultAfterSigning
 
-        let success, errors = finalTransactionBuilder.Verify finalTransaction
-        if not success then
-            failwith <| SPrintF1 "Something went wrong when verifying transaction: %A" errors
-        finalTransaction
+            let success, errors = finalTransactionBuilder.Verify finalTransaction
+            if not success then
+                failwith <| SPrintF1 "Something went wrong when verifying transaction: %A" errors
+            finalTransaction
 
     let internal GetPrivateKey (account: NormalAccount) password =
         let encryptedPrivateKey = account.GetEncryptedPrivateKey()
