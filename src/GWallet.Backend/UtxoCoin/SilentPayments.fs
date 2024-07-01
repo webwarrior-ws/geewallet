@@ -52,6 +52,48 @@ type SilentPaymentAddress =
             SpendPublicKey = PubKey spendPubKeyBytes
         }
 
+type SilentPaymentInput =
+    | InvalidInput
+    | InputForSharedSecretDerivation of ICoin * PubKey
+    | InputJustForSpending of ICoin
 
 module SilentPayments =
-    ()
+    // see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs
+    let convertToSilentPaymentInput (coin: ICoin): SilentPaymentInput =
+        let txOut = coin.TxOut
+        let scriptPubKey = txOut.ScriptPubKey
+
+        if scriptPubKey.IsScriptType ScriptType.P2PKH then
+            match scriptPubKey.GetAllPubKeys() |> Array.tryHead with
+            | Some pubKey when pubKey.IsCompressed -> InputForSharedSecretDerivation(coin, pubKey)
+            | _ -> InputJustForSpending coin
+        elif scriptPubKey.IsScriptType ScriptType.P2SH then
+            let redeemScript = scriptPubKey.PaymentScript
+            if redeemScript.IsScriptType ScriptType.P2WPKH then
+                let witness = scriptPubKey.ToWitScript()
+                let pubKey = PubKey(witness.[witness.PushCount - 1])
+                if pubKey.IsCompressed then
+                    InputForSharedSecretDerivation(coin, pubKey)
+                else
+                    InputJustForSpending coin
+            else
+                InputJustForSpending coin
+        elif scriptPubKey.IsScriptType ScriptType.P2WPKH then
+            let witness = scriptPubKey.ToWitScript()
+            let pubKey = PubKey(witness.[witness.PushCount - 1])
+            if pubKey.IsCompressed then
+                InputForSharedSecretDerivation(coin, pubKey)
+            else
+                InputJustForSpending coin
+        elif scriptPubKey.IsScriptType ScriptType.Taproot then
+            match scriptPubKey.GetAllPubKeys() |> Array.tryHead with
+            | Some pubKey when pubKey.IsCompressed -> 
+                // TODO: check if internal key is H (need full transaction for that)
+                InputForSharedSecretDerivation(coin, pubKey)
+            | _ -> InputJustForSpending coin
+        elif scriptPubKey.IsScriptType ScriptType.P2PK 
+             || scriptPubKey.IsScriptType ScriptType.MultiSig
+             || scriptPubKey.IsScriptType ScriptType.P2WSH then
+            InputJustForSpending coin
+        else
+            InvalidInput
