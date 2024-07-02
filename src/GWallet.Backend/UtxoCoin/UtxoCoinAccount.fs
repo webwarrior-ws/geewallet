@@ -433,28 +433,51 @@ module Account =
 
         let btcMinerFee = txMetadata.Fee
 
-        if destination.StartsWith SilentPaymentAddress.MainNetPrefix ||
-           destination.StartsWith SilentPaymentAddress.MainNetPrefix then
-            // TODO: manually create SilentPayment transaction and sign it
-            // what if we fail to create a transaction because we can't select coins
-            // due to additional restirctions (see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs) ?
-            raise <| NotImplementedException()
-        else
-            let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account txMetadata.Inputs destination amount
+        let inputs, destination =
+            if SilentPaymentAddress.IsSilentPaymentAddress destination then
+                // TODO: tweak silent payment address with shared secret
+                let coins = List.map (ConvertToICoin account) txMetadata.Inputs
+                let silentPaymentInputs = coins |> List.map SilentPayments.convertToSilentPaymentInput
+                
+                let validInputs, _ = 
+                    List.zip txMetadata.Inputs silentPaymentInputs
+                    |> List.filter (fun (_, spInput) -> match spInput with | InvalidInput -> false | _ -> true)
+                    |> List.unzip
 
-            finalTransactionBuilder.AddKeys privateKey |> ignore
-            finalTransactionBuilder.SendFees (Money.Satoshis btcMinerFee.EstimatedFeeInSatoshis)
-            |> ignore<TransactionBuilder>
+                let validInputForSharedSecretDerivationExists =
+                    silentPaymentInputs 
+                    |> List.exists (
+                        fun input -> 
+                            match input with 
+                            | InputForSharedSecretDerivation (_, pubKey) -> 
+                                privateKey.PubKey = pubKey 
+                            | _ -> false)
+                // what if we fail to create a transaction because we can't select coins
+                // due to additional restirctions (see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs) ?
+                let outPoints = 
+                    txMetadata.Inputs
+                    |> List.map(fun txOutInfo -> OutPoint(uint256.Parse txOutInfo.TransactionHash, txOutInfo.OutputIndex))
+                
 
-            let finalTransaction = finalTransactionBuilder.BuildTransaction true
-            let transCheckResultAfterSigning = finalTransaction.Check()
-            if (transCheckResultAfterSigning <> TransactionCheckResult.Success) then
-                failwith <| SPrintF1 "Transaction check failed after signing with %A" transCheckResultAfterSigning
+                raise <| NotImplementedException()
+            else
+                txMetadata.Inputs, destination
 
-            let success, errors = finalTransactionBuilder.Verify finalTransaction
-            if not success then
-                failwith <| SPrintF1 "Something went wrong when verifying transaction: %A" errors
-            finalTransaction
+        let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account inputs destination amount
+
+        finalTransactionBuilder.AddKeys privateKey |> ignore
+        finalTransactionBuilder.SendFees (Money.Satoshis btcMinerFee.EstimatedFeeInSatoshis)
+        |> ignore<TransactionBuilder>
+
+        let finalTransaction = finalTransactionBuilder.BuildTransaction true
+        let transCheckResultAfterSigning = finalTransaction.Check()
+        if (transCheckResultAfterSigning <> TransactionCheckResult.Success) then
+            failwith <| SPrintF1 "Transaction check failed after signing with %A" transCheckResultAfterSigning
+
+        let success, errors = finalTransactionBuilder.Verify finalTransaction
+        if not success then
+            failwith <| SPrintF1 "Something went wrong when verifying transaction: %A" errors
+        finalTransaction
 
     let internal GetPrivateKey (account: NormalAccount) password =
         let encryptedPrivateKey = account.GetEncryptedPrivateKey()

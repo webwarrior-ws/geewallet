@@ -3,6 +3,8 @@
 open GWallet.Backend
 
 open NBitcoin
+open Org.BouncyCastle.Crypto
+open Org.BouncyCastle.Math
 
 
 type SilentPaymentAddress = 
@@ -24,10 +26,14 @@ type SilentPaymentAddress =
                 failwith "Only Mainnet and Testnet are supported for SilentPayment address"
         DataEncoders.Bech32Encoder(DataEncoders.ASCIIEncoder().DecodeData hrp)
 
+    static member IsSilentPaymentAddress (address: string) =
+        address.StartsWith SilentPaymentAddress.MainNetPrefix 
+        || address.StartsWith SilentPaymentAddress.MainNetPrefix
+
     member self.Encode(network: Network) : string =
         let encoder = SilentPaymentAddress.GetEncoder network.ChainName
         let data = 
-            let versionByte = byte 'q' // version 0
+            let versionByte = 0uy // version 0
             Array.append
                 [| versionByte |]
                 (Array.append (self.ScanPublicKey.ToBytes()) (self.SpendPublicKey.ToBytes()))
@@ -58,6 +64,8 @@ type SilentPaymentInput =
     | InputJustForSpending of ICoin
 
 module SilentPayments =
+    let private scalarOrder = BigInteger("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+
     // see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs
     let convertToSilentPaymentInput (coin: ICoin): SilentPaymentInput =
         let txOut = coin.TxOut
@@ -97,3 +105,66 @@ module SilentPayments =
             InputJustForSpending coin
         else
             InvalidInput
+
+    let taggedHash (tag: string) (data: array<byte>) : array<byte> =
+        let sha256 = Digests.Sha256Digest()
+        
+        let tag = System.Text.ASCIIEncoding.ASCII.GetBytes tag
+        sha256.BlockUpdate(tag, 0, tag.Length)
+        let tagHash = Array.zeroCreate<byte> 32
+        sha256.DoFinal(tagHash, 0) |> ignore
+        sha256.Reset()
+
+        sha256.BlockUpdate(Array.append tagHash tagHash, 0, tagHash.Length * 2)
+        sha256.BlockUpdate(data, 0, data.Length)
+
+        let result = Array.zeroCreate<byte> 32
+        sha256.DoFinal(result, 0) |> ignore
+        result
+
+    let getInputHash (outpoints: List<OutPoint>) (sumInputPubKeys: EC.ECPoint) : array<byte> =
+        let lowestOutpoint = outpoints |> List.map (fun outpoint -> outpoint.ToBytes()) |> List.min
+        let hashInput = Array.append lowestOutpoint (sumInputPubKeys.GetEncoded false)
+        taggedHash "BIP0352/Inputs" hashInput
+
+    let createOutput (privateKeys: List<Key * bool>) (outpoints: List<OutPoint>) (spAddress: SilentPaymentAddress) =
+        if privateKeys.IsEmpty then
+            failwith "privateKeys should not be empty"
+
+        if outpoints.IsEmpty then
+            failwith "outpoints should not be empty"
+
+        let secp256k1 = EC.CustomNamedCurves.GetByName("secp256k1")
+
+        let aSum = 
+            privateKeys 
+            |> List.map (
+                fun (key, isTaproot) ->
+                    let k = BigInteger(key.ToBytes())
+                    let yCoord = secp256k1.Curve.DecodePoint(key.PubKey.ToBytes()).YCoord.ToBigInteger()
+                    if isTaproot && yCoord.Mod(BigInteger.Two) = BigInteger.One then
+                        k.Negate()
+                    else
+                        k)
+            |> List.fold
+                (fun (a: BigInteger) (b: BigInteger) -> a.Add b)
+                BigInteger.Zero
+
+        if aSum = BigInteger.Zero then
+            failwith "Input privkeys sum is zero"
+
+        let inputHash = getInputHash outpoints (secp256k1.G.Multiply aSum)
+
+        let tweak = BigInteger inputHash;
+        let tweakedSumSeckey = aSum.Multiply(tweak).Mod(scalarOrder)
+        let sharedSecret = tweakedSumSeckey.Multiply(spAddress.ScanPublicKey.ToBytes() |> BigInteger).Mod(scalarOrder)
+
+        let k = 0u
+        let tK =
+            taggedHash
+                "BIP0352/SharedSecret"
+                (Array.append (sharedSecret.ToByteArrayUnsigned()) (System.BitConverter.GetBytes k))
+            |> BigInteger
+        let sharedSecret = secp256k1.G.Multiply(BigInteger(spAddress.SpendPublicKey.ToBytes()).Add(tK))
+
+        sharedSecret
