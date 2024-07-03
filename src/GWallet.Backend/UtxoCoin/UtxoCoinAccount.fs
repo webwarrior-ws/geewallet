@@ -455,7 +455,7 @@ module Account =
                 // what if we fail to create a transaction because we can't select coins
                 // due to additional restirctions (see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs) ?
                 let outPoints = 
-                    txMetadata.Inputs
+                    validInputs
                     |> List.map(fun txOutInfo -> OutPoint(uint256.Parse txOutInfo.TransactionHash, txOutInfo.OutputIndex))
                 
 
