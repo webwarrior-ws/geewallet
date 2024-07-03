@@ -1,11 +1,21 @@
 ﻿namespace GWallet.Backend.UtxoCoin
 
+open System.Linq
+
 open GWallet.Backend
 
 open NBitcoin
 open Org.BouncyCastle.Crypto
 open Org.BouncyCastle.Math
 
+
+type private SilentPaymentAddressEncoder(hrp: string) =
+    inherit DataEncoders.Bech32Encoder(DataEncoders.ASCIIEncoder().DecodeData hrp, StrictLength = false)
+
+    member self.DecodeData(encoded: string): array<byte> * byte =
+        let rawData, _ = self.DecodeDataRaw encoded
+        let decoded = self.ConvertBits(rawData.Skip 1, 5, 8, false);
+        decoded, rawData.[0]
 
 type SilentPaymentAddress = 
     {
@@ -24,7 +34,7 @@ type SilentPaymentAddress =
                 SilentPaymentAddress.TestNetPrefix
             else
                 failwith "Only Mainnet and Testnet are supported for SilentPayment address"
-        DataEncoders.Bech32Encoder(DataEncoders.ASCIIEncoder().DecodeData hrp)
+        SilentPaymentAddressEncoder hrp
 
     static member IsSilentPaymentAddress (address: string) =
         address.StartsWith SilentPaymentAddress.MainNetPrefix 
@@ -48,11 +58,15 @@ type SilentPaymentAddress =
             else
                 failwith "Encoded SilentPayment address should start with tsp or sp"
         let encoder = SilentPaymentAddress.GetEncoder chain
-        let data, _ = encoder.DecodeDataRaw(encodedAddress)
-        let _versionByte = data.[0]
-        // TODO: check data length
-        let scanPubKeyBytes = data.[1..33]
-        let spendPubKeyBytes = data.[34..67]
+        let data, versionByte = encoder.DecodeData encodedAddress
+        if versionByte = 31uy then
+            failwith "Invalid version: 31"
+        elif versionByte = 0uy && data.Length <> 66 then
+            failwithf "Wrong data part length: %d (must be exactly 66 for version 0)" data.Length
+        elif data.Length < 66 then
+            failwithf "Wrong data part length: %d (must be at least 66)" data.Length
+        let scanPubKeyBytes = data.[..32]
+        let spendPubKeyBytes = data.[33..65]
         {
             ScanPublicKey = PubKey scanPubKeyBytes
             SpendPublicKey = PubKey spendPubKeyBytes
