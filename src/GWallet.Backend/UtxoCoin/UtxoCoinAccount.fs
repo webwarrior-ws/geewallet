@@ -610,8 +610,10 @@ module Account =
             }
         }
 
-    let MaybeReportWarningsForUnknownParameters addressOrUrl (unknownParams: System.Collections.Generic.Dictionary<string, string>) =
+    let MaybeReportWarningsForUnknownParameters addressOrUrl (unknownParams: System.Collections.Generic.IReadOnlyDictionary<string, string>) =
         if not (isNull unknownParams) && unknownParams.Any() then
+            // convert unknownParams to mutable dictionary since we may have to remove keys from it
+            let unknownParams = dict <| seq { for key in unknownParams.Keys -> key, unknownParams.[key] }
 
             let unknownToUs =
 
@@ -637,8 +639,7 @@ module Account =
         if addressOrUrl.StartsWith "bitcoin:" || addressOrUrl.StartsWith "litecoin:" then
             let uriBuilder = BitcoinUrlBuilder (addressOrUrl, network)
 
-            // FIXME: fix typo "UnknowParameters" in NBitcoin
-            MaybeReportWarningsForUnknownParameters addressOrUrl uriBuilder.UnknowParameters
+            MaybeReportWarningsForUnknownParameters addressOrUrl uriBuilder.UnknownParameters
 
             if null = uriBuilder.Address then
                 failwith <| SPrintF1 "Address started with 'bitcoin:' but an address could not be extracted: %s" addressOrUrl
