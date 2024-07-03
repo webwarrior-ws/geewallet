@@ -65,4 +65,4 @@ type SilentPayments() =
                         |> Seq.map (fun each -> each.GetString() |> SilentPaymentAddress.Decode)
                         |> Seq.toArray
 
-                ()
+                ignore (name, expectedOutput, inputs, recipients)

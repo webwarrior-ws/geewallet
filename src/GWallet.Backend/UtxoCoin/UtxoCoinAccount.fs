@@ -458,6 +458,7 @@ module Account =
                     validInputs
                     |> List.map(fun txOutInfo -> OutPoint(uint256.Parse txOutInfo.TransactionHash, txOutInfo.OutputIndex))
                 
+                ignore (validInputForSharedSecretDerivationExists, outPoints)
 
                 raise <| NotImplementedException()
             else

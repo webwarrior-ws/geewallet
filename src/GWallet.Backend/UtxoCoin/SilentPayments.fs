@@ -2,11 +2,12 @@
 
 open System.Linq
 
-open GWallet.Backend
-
 open NBitcoin
 open Org.BouncyCastle.Crypto
 open Org.BouncyCastle.Math
+
+open GWallet.Backend
+open GWallet.Backend.FSharpUtil.UwpHacks
 
 
 type private SilentPaymentAddressEncoder(hrp: string) =
@@ -62,9 +63,9 @@ type SilentPaymentAddress =
         if versionByte = 31uy then
             failwith "Invalid version: 31"
         elif versionByte = 0uy && data.Length <> 66 then
-            failwithf "Wrong data part length: %d (must be exactly 66 for version 0)" data.Length
+            failwith <| SPrintF1 "Wrong data part length: %d (must be exactly 66 for version 0)" data.Length
         elif data.Length < 66 then
-            failwithf "Wrong data part length: %d (must be at least 66)" data.Length
+            failwith <| SPrintF1 "Wrong data part length: %d (must be at least 66)" data.Length
         let scanPubKeyBytes = data.[..32]
         let spendPubKeyBytes = data.[33..65]
         {
