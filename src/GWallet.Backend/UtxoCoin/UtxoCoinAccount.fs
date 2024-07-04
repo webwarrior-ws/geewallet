@@ -435,9 +435,14 @@ module Account =
 
         let inputs, destination =
             if SilentPaymentAddress.IsSilentPaymentAddress destination then
-                // TODO: tweak silent payment address with shared secret
-                let coins = List.map (ConvertToICoin account) txMetadata.Inputs
-                let silentPaymentInputs = coins |> List.map SilentPayments.convertToSilentPaymentInput
+                //let coins = List.map (ConvertToICoin account) txMetadata.Inputs
+                let silentPaymentInputs = 
+                    txMetadata.Inputs 
+                    |> List.map (fun input -> 
+                        let scriptPubKeyInBytes = NBitcoin.DataEncoders.Encoders.Hex.DecodeData input.DestinationInHex
+                        let scriptPubKey = Script(scriptPubKeyInBytes)
+                        let witness = None
+                        SilentPayments.convertToSilentPaymentInput scriptPubKey (Array.zeroCreate<byte> 0) witness)
                 
                 let validInputs, _ = 
                     List.zip txMetadata.Inputs silentPaymentInputs
@@ -449,7 +454,7 @@ module Account =
                     |> List.exists (
                         fun input -> 
                             match input with 
-                            | InputForSharedSecretDerivation (_, pubKey) -> 
+                            | InputForSharedSecretDerivation(pubKey) -> 
                                 privateKey.PubKey = pubKey 
                             | _ -> false)
                 // what if we fail to create a transaction because we can't select coins

@@ -75,49 +75,83 @@ type SilentPaymentAddress =
 
 type SilentPaymentInput =
     | InvalidInput
-    | InputForSharedSecretDerivation of ICoin * PubKey
-    | InputJustForSpending of ICoin
+    | InputForSharedSecretDerivation of PubKey
+    | InputJustForSpending
 
 module SilentPayments =
+    let private secp256k1 = EC.CustomNamedCurves.GetByName("secp256k1")
+    
     let private scalarOrder = BigInteger("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
 
-    // see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs
-    let convertToSilentPaymentInput (coin: ICoin): SilentPaymentInput =
-        let txOut = coin.TxOut
-        let scriptPubKey = txOut.ScriptPubKey
+    type BigInteger with
+        static member FromByteArrayUnsigned (bytes: array<byte>) =
+            BigInteger(1, bytes)
 
+    // see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs
+    let convertToSilentPaymentInput (scriptPubKey: Script) (scriptSig: array<byte>) (witness: Option<WitScript>): SilentPaymentInput =
         if scriptPubKey.IsScriptType ScriptType.P2PKH then
-            match scriptPubKey.GetAllPubKeys() |> Array.tryHead with
-            | Some pubKey when pubKey.IsCompressed -> InputForSharedSecretDerivation(coin, pubKey)
-            | _ -> InputJustForSpending coin
+            // skip the first 3 op_codes and grab the 20 byte hash
+            // from the scriptPubKey
+            let spkHash = scriptPubKey.ToBytes().[3..3 + 20 - 1]
+            let mutable result = InputJustForSpending
+            for i = scriptSig.Length downto 0 do
+                if i - 33 >= 0 then
+                    // starting from the back, we move over the scriptSig with a 33 byte
+                    // window (to match a compressed pubkey). we hash this and check if it matches
+                    // the 20 byte has from the scriptPubKey. for standard scriptSigs, this will match
+                    // right away because the pubkey is the last item in the scriptSig.
+                    // if its a non-standard (malleated) scriptSig, we will still find the pubkey if its
+                    // a compressed pubkey.
+                    let pubkey_bytes = scriptSig.[i - 33..i - 1]
+                    let pubkey_hash = Crypto.Hashes.Hash160 pubkey_bytes
+                    if pubkey_hash.ToBytes() = spkHash then
+                        let pubKey = PubKey(pubkey_bytes)
+                        if pubKey.IsCompressed then
+                            result <- InputForSharedSecretDerivation(pubKey)
+            result
         elif scriptPubKey.IsScriptType ScriptType.P2SH then
-            let redeemScript = scriptPubKey.PaymentScript
+            let redeemScript = Script scriptSig.[1..]
             if redeemScript.IsScriptType ScriptType.P2WPKH then
-                let witness = scriptPubKey.ToWitScript()
-                let pubKey = PubKey(witness.[witness.PushCount - 1])
+                let witness = witness.Value
+                let pubKey = PubKey(witness.Pushes.Last())
                 if pubKey.IsCompressed then
-                    InputForSharedSecretDerivation(coin, pubKey)
+                    InputForSharedSecretDerivation(pubKey)
                 else
-                    InputJustForSpending coin
+                    InputJustForSpending
             else
-                InputJustForSpending coin
+                InputJustForSpending
         elif scriptPubKey.IsScriptType ScriptType.P2WPKH then
-            let witness = scriptPubKey.ToWitScript()
-            let pubKey = PubKey(witness.[witness.PushCount - 1])
+            let witness = witness.Value
+            let pubKey = PubKey(witness.Pushes.Last())
             if pubKey.IsCompressed then
-                InputForSharedSecretDerivation(coin, pubKey)
+                InputForSharedSecretDerivation(pubKey)
             else
-                InputJustForSpending coin
+                InputJustForSpending
         elif scriptPubKey.IsScriptType ScriptType.Taproot then
-            match scriptPubKey.GetAllPubKeys() |> Array.tryHead with
-            | Some pubKey when pubKey.IsCompressed -> 
-                // TODO: check if internal key is H (need full transaction for that)
-                InputForSharedSecretDerivation(coin, pubKey)
-            | _ -> InputJustForSpending coin
+            let witnessStack = witness.Value.Pushes |> System.Collections.Generic.Stack
+            if witnessStack.Count >= 1 then
+                if witnessStack.Count > 1 && witnessStack.Last().[0] = 0x50uy then
+                    witnessStack.Pop() |> ignore
+
+                if witnessStack.Count > 1 then
+                    let controlBlock = witnessStack.Last()
+                    //  controlBlock is <control byte> <32 byte internal key> and 0 or more <32 byte hash>
+                    let internalKey = controlBlock.[1..33]
+                    let pubKey = scriptPubKey.GetAllPubKeys().[0]
+                    if internalKey = secp256k1.H.ToByteArrayUnsigned() then
+                        InputJustForSpending
+                    elif pubKey.IsCompressed then
+                        InputForSharedSecretDerivation(pubKey)
+                    else
+                        InputJustForSpending
+                else
+                        InputJustForSpending
+            else
+                InputJustForSpending
         elif scriptPubKey.IsScriptType ScriptType.P2PK 
              || scriptPubKey.IsScriptType ScriptType.MultiSig
              || scriptPubKey.IsScriptType ScriptType.P2WSH then
-            InputJustForSpending coin
+            InputJustForSpending
         else
             InvalidInput
 
@@ -149,37 +183,38 @@ module SilentPayments =
         if outpoints.IsEmpty then
             failwith "outpoints should not be empty"
 
-        let secp256k1 = EC.CustomNamedCurves.GetByName("secp256k1")
-
         let aSum = 
             privateKeys 
             |> List.map (
                 fun (key, isTaproot) ->
-                    let k = BigInteger(key.ToBytes())
+                    let k = BigInteger.FromByteArrayUnsigned(key.ToBytes())
                     let yCoord = secp256k1.Curve.DecodePoint(key.PubKey.ToBytes()).YCoord.ToBigInteger()
                     if isTaproot && yCoord.Mod(BigInteger.Two) = BigInteger.One then
                         k.Negate()
                     else
                         k)
-            |> List.fold
+            |> List.reduce
                 (fun (a: BigInteger) (b: BigInteger) -> a.Add b)
-                BigInteger.Zero
+
+        let aSum = aSum.Mod scalarOrder
 
         if aSum = BigInteger.Zero then
             failwith "Input privkeys sum is zero"
 
         let inputHash = getInputHash outpoints (secp256k1.G.Multiply aSum)
 
-        let tweak = BigInteger inputHash;
+        let tweak = BigInteger.FromByteArrayUnsigned inputHash
         let tweakedSumSeckey = aSum.Multiply(tweak).Mod(scalarOrder)
-        let sharedSecret = tweakedSumSeckey.Multiply(spAddress.ScanPublicKey.ToBytes() |> BigInteger).Mod(scalarOrder)
+        let ecdhSharedSecret = 
+            (secp256k1.Curve.DecodePoint <| spAddress.ScanPublicKey.ToBytes()).Multiply tweakedSumSeckey
 
         let k = 0u
         let tK =
             taggedHash
                 "BIP0352/SharedSecret"
-                (Array.append (sharedSecret.ToByteArrayUnsigned()) (System.BitConverter.GetBytes k))
-            |> BigInteger
-        let sharedSecret = secp256k1.G.Multiply(BigInteger(spAddress.SpendPublicKey.ToBytes()).Add(tK))
+                (Array.append (ecdhSharedSecret.GetEncoded false) (System.BitConverter.GetBytes k))
+            |> BigInteger.FromByteArrayUnsigned
+        let Bm = secp256k1.Curve.DecodePoint <| spAddress.SpendPublicKey.ToBytes()
+        let sharedSecret = Bm.Add(secp256k1.G.Multiply(tK))
 
-        sharedSecret
+        sharedSecret.Normalize().AffineXCoord

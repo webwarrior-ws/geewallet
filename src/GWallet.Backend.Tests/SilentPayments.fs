@@ -47,22 +47,66 @@ type SilentPayments() =
         let testVectorsJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(dataDir.FullName, testVectorsFileName)))
 
         for testCase in testVectorsJson.RootElement.EnumerateArray() do
-            let name = testCase.GetProperty "comment"
+            let name = testCase.GetProperty("comment").GetString()
             let sending = testCase.GetProperty("sending").[0]
             let expectedOutputs = 
                 sending.GetProperty("expected").GetProperty("outputs").EnumerateArray() 
                     |> Seq.map (fun each -> each.EnumerateArray() |> Seq.toArray)
                     |> Seq.toArray
+            let given = sending.GetProperty "given"
+            let inputs = given.GetProperty("vin").EnumerateArray() |> Seq.map TestInput.FromJsonElement |> Seq.toList
+            let recipients = 
+                given.GetProperty("recipients").EnumerateArray()
+                    |> Seq.map (fun each -> each.GetString() |> SilentPaymentAddress.Decode)
+                    |> Seq.toList
             
-            if expectedOutputs.Length > 1 || (expectedOutputs.Length = 1 && expectedOutputs.[0].Length > 1) then
+            if expectedOutputs.Length > 1 || (expectedOutputs.Length = 1 && expectedOutputs.[0].Length > 1) || recipients.Length > 1 then
                 () // skip
             else
                 let expectedOutput = expectedOutputs.[0] |> Array.tryHead |> Option.map (fun elem -> elem.GetString())
-                let given = sending.GetProperty "given"
-                let inputs = given.GetProperty("vin").EnumerateArray() |> Seq.map TestInput.FromJsonElement |> Seq.toArray
-                let recipients = 
-                    given.GetProperty("recipients").EnumerateArray()
-                        |> Seq.map (fun each -> each.GetString() |> SilentPaymentAddress.Decode)
-                        |> Seq.toArray
+                
+                let spInputs =
+                    inputs 
+                    |> List.filter (fun input -> input.TxInWitness.Length = 0) // temp
+                    |> List.map (
+                        fun input -> 
+                            let witness = 
+                                match input.TxInWitness with
+                                | "" -> None
+                                | hex -> Some <| WitScript hex
+                            let spInput =
+                                SilentPayments.convertToSilentPaymentInput 
+                                    (Script.FromHex input.ScriptPubKey) 
+                                    (DataEncoders.Encoders.Hex.DecodeData input.ScriptSig)
+                                    witness
+                            input, spInput)
 
-                ignore (name, expectedOutput, inputs, recipients)
+                let maybePrivateKeys, outpoints =
+                    spInputs
+                    |> List.choose
+                        (fun (input, spInput) ->
+                            let privKey = new Key(DataEncoders.Encoders.Hex.DecodeData input.PrivateKey)
+                            let outPoint = OutPoint(uint256.Parse input.TxId, input.Vout)
+                            match spInput with
+                            | InputForSharedSecretDerivation(pubKey) when privKey.PubKey = pubKey ->
+                                let isTapRoot = (Script.FromHex input.ScriptPubKey).IsScriptType ScriptType.Taproot
+                                Some (Some(privKey, isTapRoot), outPoint)
+                            | InputJustForSpending ->
+                                Some(None, outPoint)
+                            | _ -> None)
+                    |> List.unzip
+                        
+                let privateKeys = maybePrivateKeys |> List.choose id |> Seq.distinct |> Seq.toList
+
+                match privateKeys, expectedOutput with
+                | [], None -> ()
+                | [], Some _ ->
+                    Assert.Fail(sprintf "No inputs for shared secret derivation in test case %s" name)
+                | _, Some expectedOutputString ->
+                    if not privateKeys.IsEmpty then
+                        let output = SilentPayments.createOutput privateKeys outpoints recipients.[0]
+                        let outputString = output.GetEncoded() |> DataEncoders.Encoders.Hex.EncodeData
+                        Assert.AreEqual(expectedOutputString, outputString, sprintf "Failure in test case %s" name)
+                | _ -> failwith "Should not be reachable"
+
+                ignore name
