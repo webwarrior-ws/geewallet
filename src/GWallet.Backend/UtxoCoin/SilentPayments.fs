@@ -173,7 +173,7 @@ module SilentPayments =
 
     let getInputHash (outpoints: List<OutPoint>) (sumInputPubKeys: EC.ECPoint) : array<byte> =
         let lowestOutpoint = outpoints |> List.map (fun outpoint -> outpoint.ToBytes()) |> List.min
-        let hashInput = Array.append lowestOutpoint (sumInputPubKeys.GetEncoded false)
+        let hashInput = Array.append lowestOutpoint (sumInputPubKeys.GetEncoded true)
         taggedHash "BIP0352/Inputs" hashInput
 
     let createOutput (privateKeys: List<Key * bool>) (outpoints: List<OutPoint>) (spAddress: SilentPaymentAddress) =
@@ -205,16 +205,16 @@ module SilentPayments =
 
         let tweak = BigInteger.FromByteArrayUnsigned inputHash
         let tweakedSumSeckey = aSum.Multiply(tweak).Mod(scalarOrder)
-        let ecdhSharedSecret = 
-            (secp256k1.Curve.DecodePoint <| spAddress.ScanPublicKey.ToBytes()).Multiply tweakedSumSeckey
+        let ecdhSharedSecret =
+            (secp256k1.Curve.DecodePoint <| spAddress.ScanPublicKey.ToBytes()).Multiply(tweakedSumSeckey).Normalize()
 
         let k = 0u
         let tK =
             taggedHash
                 "BIP0352/SharedSecret"
-                (Array.append (ecdhSharedSecret.GetEncoded false) (System.BitConverter.GetBytes k))
-            |> BigInteger.FromByteArrayUnsigned
+                (Array.append (ecdhSharedSecret.GetEncoded true) (System.BitConverter.GetBytes k))
+                |> BigInteger.FromByteArrayUnsigned
         let Bm = secp256k1.Curve.DecodePoint <| spAddress.SpendPublicKey.ToBytes()
-        let sharedSecret = Bm.Add(secp256k1.G.Multiply(tK))
+        let sharedSecret = Bm.Add(secp256k1.G.Multiply tK)
 
         sharedSecret.Normalize().AffineXCoord
