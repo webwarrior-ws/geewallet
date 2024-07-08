@@ -66,8 +66,7 @@ type SilentPayments() =
                 let expectedOutput = expectedOutputs.[0] |> Array.tryHead |> Option.map (fun elem -> elem.GetString())
                 
                 let spInputs =
-                    inputs 
-                    |> List.filter (fun input -> input.TxInWitness.Length = 0) // temp
+                    inputs
                     |> List.map (
                         fun input -> 
                             let witness = 
@@ -96,17 +95,17 @@ type SilentPayments() =
                             | _ -> None)
                     |> List.unzip
                         
-                let privateKeys = maybePrivateKeys |> List.choose id |> Seq.distinct |> Seq.toList
+                let privateKeys = maybePrivateKeys |> List.choose id
 
                 match privateKeys, expectedOutput with
                 | [], None -> ()
                 | [], Some _ ->
-                    Assert.Fail(sprintf "No inputs for shared secret derivation in test case %s" name)
+                    Assert.Fail(sprintf "No inputs for shared secret derivation in test case '%s'" name)
                 | _, Some expectedOutputString ->
                     if not privateKeys.IsEmpty then
                         let output = SilentPayments.createOutput privateKeys outpoints recipients.[0]
                         let outputString = output.GetEncoded() |> DataEncoders.Encoders.Hex.EncodeData
-                        Assert.AreEqual(expectedOutputString, outputString, sprintf "Failure in test case %s" name)
+                        Assert.AreEqual(expectedOutputString, outputString, sprintf "Failure in test case '%s'" name)
                 | _ -> failwith "Should not be reachable"
 
                 ignore name
