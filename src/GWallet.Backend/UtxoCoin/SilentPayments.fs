@@ -133,19 +133,25 @@ module SilentPayments =
                 if witnessStack.Count > 1 && witnessStack.Last().[0] = 0x50uy then
                     witnessStack.Pop() |> ignore
 
-                if witnessStack.Count > 1 then
-                    let controlBlock = witnessStack.Last()
-                    //  controlBlock is <control byte> <32 byte internal key> and 0 or more <32 byte hash>
-                    let internalKey = controlBlock.[1..33]
-                    let pubKey = scriptPubKey.GetAllPubKeys().[0]
-                    if internalKey = secp256k1.H.ToByteArrayUnsigned() then
-                        InputJustForSpending
-                    elif pubKey.IsCompressed then
-                        InputForSharedSecretDerivation(pubKey)
+                let internalKeyIsH =
+                    if witnessStack.Count > 1 then
+                        let controlBlock = witnessStack.Last()
+                        //  controlBlock is <control byte> <32 byte internal key> and 0 or more <32 byte hash>
+                        let internalKey = controlBlock.[1..33]
+                        internalKey = secp256k1.H.ToByteArrayUnsigned()
                     else
-                        InputJustForSpending
+                        false
+                if internalKeyIsH then
+                    InputJustForSpending
                 else
-                        InputJustForSpending
+                    let pubKeyBytes = scriptPubKey.ToBytes().[2..]
+                    let point = 
+                        seq { 2uy; 3uy }
+                        |> Seq.map (fun x -> secp256k1.Curve.DecodePoint(Array.append [| x |] pubKeyBytes).Normalize())
+                        |> Seq.find (fun p -> p.YCoord.ToBigInteger().Mod(BigInteger.Two) = BigInteger.Zero)
+                    match PubKey.TryCreatePubKey (point.GetEncoded true) with
+                    | true, pubKey -> InputForSharedSecretDerivation(pubKey)
+                    | false, _ -> InputJustForSpending
             else
                 InputJustForSpending
         elif scriptPubKey.IsScriptType ScriptType.P2PK 
