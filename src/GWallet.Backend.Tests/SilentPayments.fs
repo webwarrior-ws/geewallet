@@ -47,7 +47,9 @@ type SilentPayments() =
         let testVectorsJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(dataDir.FullName, testVectorsFileName)))
 
         for testCase in testVectorsJson.RootElement.EnumerateArray() do
-            let name = testCase.GetProperty("comment").GetString()
+            let testCaseName = testCase.GetProperty("comment").GetString()
+            printfn "Running BIP-352 test case '%s'" testCaseName
+
             let sending = testCase.GetProperty("sending").[0]
             let expectedOutputs = 
                 sending.GetProperty("expected").GetProperty("outputs").EnumerateArray() 
@@ -87,7 +89,7 @@ type SilentPayments() =
                             let privKey = new Key(DataEncoders.Encoders.Hex.DecodeData input.PrivateKey)
                             let outPoint = OutPoint(uint256.Parse input.TxId, input.Vout)
                             match spInput with
-                            | InputForSharedSecretDerivation(pubKey) when privKey.PubKey = pubKey ->
+                            | InputForSharedSecretDerivation(_pubKey) ->
                                 let isTapRoot = (Script.FromHex input.ScriptPubKey).IsScriptType ScriptType.Taproot
                                 Some (Some(privKey, isTapRoot), outPoint)
                             | InputJustForSpending ->
@@ -100,12 +102,9 @@ type SilentPayments() =
                 match privateKeys, expectedOutput with
                 | [], None -> ()
                 | [], Some _ ->
-                    Assert.Fail(sprintf "No inputs for shared secret derivation in test case '%s'" name)
+                    Assert.Fail(sprintf "No inputs for shared secret derivation in test case '%s'" testCaseName)
                 | _, Some expectedOutputString ->
-                    if not privateKeys.IsEmpty then
-                        let output = SilentPayments.createOutput privateKeys outpoints recipients.[0]
-                        let outputString = output.GetEncoded() |> DataEncoders.Encoders.Hex.EncodeData
-                        Assert.AreEqual(expectedOutputString, outputString, sprintf "Failure in test case '%s'" name)
+                    let output = SilentPayments.createOutput privateKeys outpoints recipients.[0]
+                    let outputString = output.GetEncoded() |> DataEncoders.Encoders.Hex.EncodeData
+                    Assert.AreEqual(expectedOutputString, outputString, sprintf "Failure in test case '%s'" testCaseName)
                 | _ -> failwith "Should not be reachable"
-
-                ignore name
