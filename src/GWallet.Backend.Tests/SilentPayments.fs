@@ -48,8 +48,6 @@ type SilentPayments() =
 
         for testCase in testVectorsJson.RootElement.EnumerateArray() do
             let testCaseName = testCase.GetProperty("comment").GetString()
-            printfn "Running BIP-352 test case '%s'" testCaseName
-
             let sending = testCase.GetProperty("sending").[0]
             let expectedOutputs = 
                 sending.GetProperty("expected").GetProperty("outputs").EnumerateArray() 
@@ -63,8 +61,10 @@ type SilentPayments() =
                     |> Seq.toList
             
             if expectedOutputs.Length > 1 || (expectedOutputs.Length = 1 && expectedOutputs.[0].Length > 1) || recipients.Length > 1 then
-                () // skip
+                printfn "Skipping BIP-352 test case '%s'" testCaseName
             else
+                printfn "Running BIP-352 test case '%s'" testCaseName
+
                 let expectedOutput = expectedOutputs.[0] |> Array.tryHead |> Option.map (fun elem -> elem.GetString())
                 
                 let spInputs =
@@ -74,7 +74,9 @@ type SilentPayments() =
                             let witness = 
                                 match input.TxInWitness with
                                 | "" -> None
-                                | hex -> Some <| WitScript hex
+                                | hex -> 
+                                    let stream = BitcoinStream(DataEncoders.Encoders.Hex.DecodeData hex)
+                                    Some <| WitScript.Load stream
                             let spInput =
                                 SilentPayments.convertToSilentPaymentInput 
                                     (Script.FromHex input.ScriptPubKey) 
@@ -107,4 +109,6 @@ type SilentPayments() =
                     let output = SilentPayments.createOutput privateKeys outpoints recipients.[0]
                     let outputString = output.GetEncoded() |> DataEncoders.Encoders.Hex.EncodeData
                     Assert.AreEqual(expectedOutputString, outputString, sprintf "Failure in test case '%s'" testCaseName)
-                | _ -> failwith "Should not be reachable"
+                | _, None ->
+                    Assert.Throws(fun () -> SilentPayments.createOutput privateKeys outpoints recipients.[0] |> ignore)
+                    |> ignore

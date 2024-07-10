@@ -83,6 +83,10 @@ module SilentPayments =
     
     let private scalarOrder = BigInteger("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
 
+    let private NUMS_H_bytes = 
+        [| 0x50uy; 0x92uy; 0x9buy; 0x74uy; 0xc1uy; 0xa0uy; 0x49uy; 0x54uy; 0xb7uy; 0x8buy; 0x4buy; 0x60uy; 0x35uy; 0xe9uy; 0x7auy; 0x5euy;
+           0x07uy; 0x8auy; 0x5auy; 0x0fuy; 0x28uy; 0xecuy; 0x96uy; 0xd5uy; 0x47uy; 0xbfuy; 0xeeuy; 0x9auy; 0xceuy; 0x80uy; 0x3auy; 0xc0uy; |]
+
     type BigInteger with
         static member FromByteArrayUnsigned (bytes: array<byte>) =
             BigInteger(1, bytes)
@@ -130,26 +134,24 @@ module SilentPayments =
         elif scriptPubKey.IsScriptType ScriptType.Taproot then
             let witnessStack = witness.Value.Pushes |> System.Collections.Generic.Stack
             if witnessStack.Count >= 1 then
-                if witnessStack.Count > 1 && witnessStack.Last().[0] = 0x50uy then
+                if witnessStack.Count > 1 && witnessStack.Peek().[0] = 0x50uy then
                     witnessStack.Pop() |> ignore
 
                 let internalKeyIsH =
                     if witnessStack.Count > 1 then
-                        let controlBlock = witnessStack.Last()
+                        let controlBlock = witnessStack.Peek()
                         //  controlBlock is <control byte> <32 byte internal key> and 0 or more <32 byte hash>
-                        let internalKey = controlBlock.[1..33]
-                        internalKey = secp256k1.H.ToByteArrayUnsigned()
+                        let internalKey = controlBlock.[1..32]
+                        internalKey = NUMS_H_bytes
                     else
                         false
                 if internalKeyIsH then
                     InputJustForSpending
                 else
                     let pubKeyBytes = scriptPubKey.ToBytes().[2..]
-                    let point = 
-                        seq { 2uy; 3uy }
-                        |> Seq.map (fun x -> secp256k1.Curve.DecodePoint(Array.append [| x |] pubKeyBytes).Normalize())
-                        |> Seq.find (fun p -> p.YCoord.ToBigInteger().Mod(BigInteger.Two) = BigInteger.Zero)
-                    match PubKey.TryCreatePubKey (point.GetEncoded true) with
+                    let point =
+                        secp256k1.Curve.DecodePoint(Array.append [| 2uy |] pubKeyBytes)
+                    match PubKey.TryCreatePubKey(point.GetEncoded true) with
                     | true, pubKey -> InputForSharedSecretDerivation(pubKey)
                     | false, _ -> InputJustForSpending
             else
