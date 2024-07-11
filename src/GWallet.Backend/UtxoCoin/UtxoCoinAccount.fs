@@ -433,43 +433,32 @@ module Account =
 
         let btcMinerFee = txMetadata.Fee
 
-        let inputs, destination =
-            if SilentPaymentAddress.IsSilentPaymentAddress destination then
-                //let coins = List.map (ConvertToICoin account) txMetadata.Inputs
-                let silentPaymentInputs = 
-                    txMetadata.Inputs 
-                    |> List.map (fun input -> 
-                        let scriptPubKeyInBytes = NBitcoin.DataEncoders.Encoders.Hex.DecodeData input.DestinationInHex
-                        let scriptPubKey = Script(scriptPubKeyInBytes)
-                        let witness = None
-                        SilentPayments.convertToSilentPaymentInput scriptPubKey (Array.zeroCreate<byte> 0) witness)
-                
-                let validInputs, _ = 
-                    List.zip txMetadata.Inputs silentPaymentInputs
-                    |> List.filter (fun (_, spInput) -> match spInput with | InvalidInput -> false | _ -> true)
-                    |> List.unzip
+        let isSilentPayment = SilentPaymentAddress.IsSilentPaymentAddress destination
 
-                let validInputForSharedSecretDerivationExists =
-                    silentPaymentInputs 
-                    |> List.exists (
-                        fun input -> 
-                            match input with 
-                            | InputForSharedSecretDerivation(pubKey) -> 
-                                privateKey.PubKey = pubKey 
-                            | _ -> false)
-                // what if we fail to create a transaction because we can't select coins
-                // due to additional restirctions (see https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs) ?
-                let outPoints = 
-                    validInputs
-                    |> List.map(fun txOutInfo -> OutPoint(uint256.Parse txOutInfo.TransactionHash, txOutInfo.OutputIndex))
-                
-                ignore (validInputForSharedSecretDerivationExists, outPoints)
+        let destination =
+            if isSilentPayment then
+                // Since we can only receive P2WPKH-P2SH or P2WPKH transactions, and
+                // non-compressed keys are not accepted as default policy
+                // (see https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki#restrictions-on-public-key-type),
+                // assume all inputs to be valid for shared secret derivation.
+                // https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki#selecting-inputs
+                // But we check input validity after transaction is constructed just to be sure.
+                let outpoints = 
+                    txMetadata.Inputs
+                    |> List.map (fun input -> (ConvertToICoin account input).Outpoint)
 
-                raise <| NotImplementedException()
+                let privateKeys = 
+                    outpoints 
+                    |> List.map (fun _ -> (privateKey, false))
+
+                let output = SilentPayments.createOutput privateKeys outpoints (SilentPaymentAddress.Decode destination)
+                let taprootAddress = TaprootAddress(TaprootPubKey(output.GetEncoded()), GetNetwork (account:>IAccount).Currency)
+
+                taprootAddress.ToString()
             else
-                txMetadata.Inputs, destination
+                destination
 
-        let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account inputs destination amount
+        let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account txMetadata.Inputs destination amount
 
         finalTransactionBuilder.AddKeys privateKey |> ignore
         finalTransactionBuilder.SendFees (Money.Satoshis btcMinerFee.EstimatedFeeInSatoshis)
@@ -483,6 +472,20 @@ module Account =
         let success, errors = finalTransactionBuilder.Verify finalTransaction
         if not success then
             failwith <| SPrintF1 "Something went wrong when verifying transaction: %A" errors
+
+        if isSilentPayment then
+            for input in finalTransaction.Inputs do
+                let inputOutpointInfo = 
+                    txMetadata.Inputs 
+                    |> List.find (fun ioInfo -> uint32 ioInfo.OutputIndex = input.PrevOut.N)
+                let scriptPubKey =
+                    Script(NBitcoin.DataEncoders.Encoders.Hex.DecodeData inputOutpointInfo.DestinationInHex)
+                match SilentPayments.convertToSilentPaymentInput scriptPubKey (input.ScriptSig.ToBytes()) (Some input.WitScript) with
+                | InputForSharedSecretDerivation _ -> ()
+                | _ -> 
+                    let errorMessage = SPrintF1 "One of the inputs is not valid for shared secret derivation: %A" inputOutpointInfo
+                    failwith ("Error creating silent payment transaction:\n" + errorMessage)
+
         finalTransaction
 
     let internal GetPrivateKey (account: NormalAccount) password =
