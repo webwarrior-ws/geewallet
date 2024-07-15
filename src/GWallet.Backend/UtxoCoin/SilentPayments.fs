@@ -1,12 +1,12 @@
 ﻿namespace GWallet.Backend.UtxoCoin
 
+open System
 open System.Linq
 
 open NBitcoin
 open Org.BouncyCastle.Crypto
 open Org.BouncyCastle.Math
 
-open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
@@ -61,11 +61,11 @@ type SilentPaymentAddress =
         let encoder = SilentPaymentAddress.GetEncoder chain
         let data, versionByte = encoder.DecodeData encodedAddress
         if versionByte = 31uy then
-            failwith "Invalid version: 31"
+            raise <| FormatException "Invalid version: 31"
         elif versionByte = 0uy && data.Length <> 66 then
-            failwith <| SPrintF1 "Wrong data part length: %d (must be exactly 66 for version 0)" data.Length
+            raise <| FormatException(SPrintF1 "Wrong data part length: %d (must be exactly 66 for version 0)" data.Length)
         elif data.Length < 66 then
-            failwith <| SPrintF1 "Wrong data part length: %d (must be at least 66)" data.Length
+            raise <| FormatException(SPrintF1 "Wrong data part length: %d (must be at least 66)" data.Length)
         let scanPubKeyBytes = data.[..32]
         let spendPubKeyBytes = data.[33..65]
         {
@@ -132,7 +132,7 @@ module SilentPayments =
             else
                 InputJustForSpending
         elif scriptPubKey.IsScriptType ScriptType.Taproot then
-            let witnessStack = witness.Value.Pushes |> System.Collections.Generic.Stack
+            let witnessStack = witness.Value.Pushes |> Collections.Generic.Stack
             if witnessStack.Count >= 1 then
                 if witnessStack.Count > 1 && witnessStack.Peek().[0] = 0x50uy then
                     witnessStack.Pop() |> ignore
@@ -166,7 +166,7 @@ module SilentPayments =
     let taggedHash (tag: string) (data: array<byte>) : array<byte> =
         let sha256 = Digests.Sha256Digest()
         
-        let tag = System.Text.ASCIIEncoding.ASCII.GetBytes tag
+        let tag = Text.ASCIIEncoding.ASCII.GetBytes tag
         sha256.BlockUpdate(tag, 0, tag.Length)
         let tagHash = Array.zeroCreate<byte> 32
         sha256.DoFinal(tagHash, 0) |> ignore
@@ -220,7 +220,7 @@ module SilentPayments =
         let tK =
             taggedHash
                 "BIP0352/SharedSecret"
-                (Array.append (ecdhSharedSecret.GetEncoded true) (System.BitConverter.GetBytes k))
+                (Array.append (ecdhSharedSecret.GetEncoded true) (BitConverter.GetBytes k))
                 |> BigInteger.FromByteArrayUnsigned
         let Bm = secp256k1.Curve.DecodePoint <| spAddress.SpendPublicKey.ToBytes()
         let sharedSecret = Bm.Add(secp256k1.G.Multiply tK)

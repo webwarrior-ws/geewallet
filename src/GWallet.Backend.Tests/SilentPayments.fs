@@ -7,9 +7,7 @@ open System.Text.Json
 open NUnit.Framework
 open NBitcoin
 
-open GWallet.Backend
 open GWallet.Backend.UtxoCoin
-open GWallet.Backend.UtxoCoin.SilentPayments
 
 
 type private TestInput =
