@@ -700,7 +700,6 @@ module Account =
             Config.AddAccount conceptAccountForReadOnlyAccount AccountKind.ReadOnly
             |> ignore<FileRepresentation>
 
-#if NATIVE_SEGWIT
     let internal MigrateReadOnlyAccountsToNativeSegWit (readOnlyUtxoAccounts: seq<ReadOnlyAccount>): unit =
         let utxoAccountsToMigrate =
             seq {
@@ -730,7 +729,6 @@ module Account =
 
         for utxoReadOnlyAccount in utxoAccountsToMigrate do
             Config.RemoveReadOnlyAccount utxoReadOnlyAccount
-#endif
 
     let GetSignedTransactionDetails<'T when 'T :> IBlockchainFeeInfo>(rawTransaction: string)
                                                                      (currency: Currency)

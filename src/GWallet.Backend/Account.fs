@@ -20,16 +20,10 @@ module Account =
     let private isInitialized (accounts: seq<IAccount>) = lazy(
         Config.Init()
 
-#if !NATIVE_SEGWIT
-        let _readonlyUtxoAccounts =
-#else
         let readonlyUtxoAccounts =
-#endif
             accounts.Where(fun acc -> acc.Currency.IsUtxo()).OfType<ReadOnlyAccount>()
-#if NATIVE_SEGWIT
+
         UtxoCoin.Account.MigrateReadOnlyAccountsToNativeSegWit readonlyUtxoAccounts
-#endif
-        ()
     )
 
     let private GetShowableBalanceAndImminentPaymentInternal (account: IAccount)
