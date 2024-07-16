@@ -2,9 +2,11 @@ namespace GWallet.Backend
 
 open System.IO
 
+type UtxoPublicKey = string
+
 type WatchWalletInfo =
     {
-        UtxoCoinPublicKey: string
+        UtxoCoinPublicKey: UtxoPublicKey
         EtherPublicAddress: string
     }
 

@@ -326,6 +326,7 @@ module Program =
         | TestPaymentPassword
         | TestSeedPassphrase
         | WipeWallet
+        | TransferFundsFromWalletUsingMenmonic
 
     let rec TestPaymentPassword () =
         let password = UserInteraction.AskPassword false
@@ -348,6 +349,69 @@ module Program =
             Account.WipeAll()
         else
             ()
+    
+    let TransferFundsFromWalletUsingMenmonic() =
+        let rec askForMnemonic() =
+            Console.WriteLine "Enter mnemonic seed phrase (12, 15, 18, 21 or 24 words):"
+            //let mnemonic = Console.ReadLine()
+            try
+                failwith "TEMP"
+            with
+            | :? FormatException as exn ->
+                printfn "Error reading mnemonic seed phrase: %s" exn.Message
+                askForMnemonic()
+
+        let importedAccount = askForMnemonic()
+        let currency = BTC
+
+        let maybeTotalBalance = 
+            Some 0.0m
+            //importedAccount.GetTotalBalance() |>  Async.RunSynchronously
+        match maybeTotalBalance with
+        | None -> Console.WriteLine "Could not retrieve balance"
+        | Some 0.0m -> Console.WriteLine "Balance on imported account is zero. No funds to transfer."
+        | Some balance ->
+            printfn "Balance on imported account: %s BTC" (balance.ToString())
+
+            let rec chooseAccount() =
+                Console.WriteLine "Choose account to send funds to"
+                Console.WriteLine "Available accounts:"
+                let btcAccounts = 
+                    Account.GetAllActiveAccounts() 
+                    |> Seq.filter (fun acc -> acc.Currency = currency)
+                    |> Seq.toList
+                
+                UserInteraction.DisplayAccountStatuses(WhichAccount.All btcAccounts) 
+                    |> Async.RunSynchronously
+                    |> Seq.iter Console.WriteLine
+
+                Console.Write("Write the account number (or 0 to cancel): ")
+                let accountNumber = Console.ReadLine()
+                match Int32.TryParse(accountNumber) with
+                | false, _ -> chooseAccount()
+                | true, 0 -> None
+                | true, accountParsed ->
+                    let theAccountChosen =
+                        try
+                            Some btcAccounts.[accountParsed - 1]
+                        with
+                        | _ -> chooseAccount()
+                    theAccountChosen
+
+            match chooseAccount() with
+            | Some targetAccount ->
+                let destination = targetAccount.PublicAddress
+                let transferAmount = TransferAmount(balance, balance, currency) // send all funds
+                let maybeFee = UserInteraction.AskFee importedAccount transferAmount destination
+                match maybeFee with
+                | None -> ()
+                | Some(_fee) ->
+                    let txId = 
+                        failwith "TEMP"
+                        //importedAccount.SendFunds targetAccount transferAmount |>  Async.RunSynchronously
+                    let uri = BlockExplorer.GetTransaction currency txId
+                    printfn "Transaction successful:\n%s" (uri.ToString())
+            | None -> ()
 
     let WalletOptions(): unit =
         let rec AskWalletOption(): GenericWalletOption =
@@ -355,6 +419,7 @@ module Program =
             Console.WriteLine "1. Check you still remember your payment password"
             Console.WriteLine "2. Check you still remember your secret recovery phrase"
             Console.WriteLine "3. Wipe your current wallet, in order to start from scratch"
+            Console.WriteLine "4. Transfer all funds from another wallet (given mnemonic code)"
             Console.Write "Choose an option from the ones above: "
             let optIntroduced = Console.ReadLine ()
             match UInt32.TryParse optIntroduced with
@@ -365,6 +430,7 @@ module Program =
                 | 1u -> GenericWalletOption.TestPaymentPassword
                 | 2u -> GenericWalletOption.TestSeedPassphrase
                 | 3u -> GenericWalletOption.WipeWallet
+                | 4u -> GenericWalletOption.TransferFundsFromWalletUsingMenmonic
                 | _ -> AskWalletOption()
 
         let walletOption = AskWalletOption()
@@ -377,6 +443,8 @@ module Program =
             Console.WriteLine "Success!"
         | GenericWalletOption.WipeWallet ->
             WipeWallet()
+        | GenericWalletOption.TransferFundsFromWalletUsingMenmonic ->
+            TransferFundsFromWalletUsingMenmonic()
         | _ -> ()
 
     let rec PerformOperation (numActiveAccounts: uint32) (numHotAccounts: uint32) =
