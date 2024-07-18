@@ -351,11 +351,11 @@ module Program =
             ()
     
     let TransferFundsFromWalletUsingMenmonic() =
-        let rec askForMnemonic() =
+        let rec askForMnemonic() : UtxoCoin.ImportedAccount =
             Console.WriteLine "Enter mnemonic seed phrase (12, 15, 18, 21 or 24 words):"
-            //let mnemonic = Console.ReadLine()
+            let mnemonic = Console.ReadLine()
             try
-                failwith "TEMP"
+                UtxoCoin.ImportedAccount mnemonic
             with
             | :? FormatException as exn ->
                 printfn "Error reading mnemonic seed phrase: %s" exn.Message
@@ -364,9 +364,7 @@ module Program =
         let importedAccount = askForMnemonic()
         let currency = BTC
 
-        let maybeTotalBalance = 
-            Some 0.0m
-            //importedAccount.GetTotalBalance() |>  Async.RunSynchronously
+        let maybeTotalBalance = importedAccount.GetTotalBalance() |>  Async.RunSynchronously
         match maybeTotalBalance with
         | None -> Console.WriteLine "Could not retrieve balance"
         | Some 0.0m -> Console.WriteLine "Balance on imported account is zero. No funds to transfer."
@@ -406,9 +404,7 @@ module Program =
                 match maybeFee with
                 | None -> ()
                 | Some(_fee) ->
-                    let txId = 
-                        failwith "TEMP"
-                        //importedAccount.SendFunds targetAccount transferAmount |>  Async.RunSynchronously
+                    let txId = importedAccount.SendFunds targetAccount transferAmount |>  Async.RunSynchronously
                     let uri = BlockExplorer.GetTransaction currency txId
                     printfn "Transaction successful:\n%s" (uri.ToString())
             | None -> ()
