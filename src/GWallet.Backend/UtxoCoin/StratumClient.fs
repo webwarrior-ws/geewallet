@@ -77,6 +77,18 @@ type BlockchainBlockHeaderResult =
         Result: string;
     }
 
+type BlockchainHeadersSubscribeInnerResult =
+    {
+        Height: uint64
+        Hex: string
+    }
+
+type BlockchainHeadersSubscribeResult =
+    {
+        Id: int;
+        Result: BlockchainHeadersSubscribeInnerResult;
+    }
+
 type ErrorInnerResult =
     {
         Message: string;
@@ -232,6 +244,19 @@ type StratumClient (jsonRpcClient: JsonRpcTcpClient) =
 
         async {
             let! resObj,_ = self.Request<BlockchainBlockHeaderResult> json
+            return resObj
+        }
+
+    member self.BlockchainHeadersSubscribe (): Async<BlockchainHeadersSubscribeResult> =
+        let obj = {
+            Id = 0;
+            Method = "blockchain.headers.subscribe";
+            Params = []
+        }
+        let json = Serialize obj
+
+        async {
+            let! resObj,_ = self.Request<BlockchainHeadersSubscribeResult> json
             return resObj
         }
 
