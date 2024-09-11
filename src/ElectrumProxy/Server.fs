@@ -22,3 +22,6 @@ let AddMethods (jsonRpc: JsonRpc) =
     jsonRpc.AddLocalRpcMethod(
         "server.version", 
         new Func<string, string, string>(fun _clientVersion _protocolVersion -> supportedProtocolVersion))
+    jsonRpc.AddLocalRpcMethod(
+        "server.ping", 
+        new Func<unit>(fun () -> ()))
