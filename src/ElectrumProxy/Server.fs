@@ -101,4 +101,13 @@ type ElectrumProxyServer() as self =
         let task = self.GetBlockchainTip() |> Async.StartAsTask
         blockchainHeadersSubscription.Value
         task
-        
+
+    [<JsonRpcMethod("blockchain.transaction.get")>]
+    member self.BlockchainTransactionGet (txHash: string) : Task<string> =
+        Query
+            (fun asyncClient -> async {
+                let! client = asyncClient
+                let! result = client.BlockchainTransactionGet txHash
+                return result.Result
+            } )
+        |> Async.StartAsTask
