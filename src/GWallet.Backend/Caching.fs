@@ -236,6 +236,8 @@ module Caching =
         Map.toList map |> ListCombinations
 
     type MainCache(maybeCacheFiles: Option<CacheFiles>, unconfTxExpirationSpan: TimeSpan) =
+        static let serverRankingCacheInvalidationPeriod = TimeSpan.FromSeconds 5.0
+
         let cacheFiles =
             match maybeCacheFiles with
             | Some files -> files
@@ -250,14 +252,18 @@ module Caching =
         // we return back the rankings because the serialization process could remove dupes (and deserialization time
         // is basically negligible, i.e. took 15 milliseconds max in my MacBook in Debug mode)
         let SaveServerRankingsToDisk (serverStats: ServerRanking): ServerRanking =
-            let serverStatsInJson = ServerRegistry.Serialize serverStats
+            // Don't write to disk too often as it can put a load on CPU in case of frequent requests
+            if File.GetLastWriteTime(cacheFiles.ServerStats.FullName) < DateTime.Now - serverRankingCacheInvalidationPeriod then
+                let serverStatsInJson = ServerRegistry.Serialize serverStats
 
-            // it is assumed that SaveToDisk is being run under a lock() block
-            File.WriteAllText (cacheFiles.ServerStats.FullName, serverStatsInJson)
+                // it is assumed that SaveToDisk is being run under a lock() block
+                File.WriteAllText (cacheFiles.ServerStats.FullName, serverStatsInJson)
 
-            match LoadFromDiskInternal<ServerRanking> cacheFiles.ServerStats with
-            | None -> failwith "should return something after having saved it"
-            | Some cleansedServerStats -> cleansedServerStats
+                match LoadFromDiskInternal<ServerRanking> cacheFiles.ServerStats with
+                | None -> failwith "should return something after having saved it"
+                | Some cleansedServerStats -> cleansedServerStats
+            else
+                serverStats
 
         let InitServers (lastServerStats: ServerRanking) =
             let mergedServers = ServerRegistry.MergeWithBaseline lastServerStats
