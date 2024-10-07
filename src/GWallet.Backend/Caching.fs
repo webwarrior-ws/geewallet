@@ -236,8 +236,6 @@ module Caching =
         Map.toList map |> ListCombinations
 
     type MainCache(maybeCacheFiles: Option<CacheFiles>, unconfTxExpirationSpan: TimeSpan) =
-        static let serverRankingCacheInvalidationPeriod = TimeSpan.FromSeconds 5.0
-
         let cacheFiles =
             match maybeCacheFiles with
             | Some files -> files
@@ -252,18 +250,14 @@ module Caching =
         // we return back the rankings because the serialization process could remove dupes (and deserialization time
         // is basically negligible, i.e. took 15 milliseconds max in my MacBook in Debug mode)
         let SaveServerRankingsToDisk (serverStats: ServerRanking): ServerRanking =
-            // Don't write to disk too often as it can put a load on CPU in case of frequent requests
-            if File.GetLastWriteTime(cacheFiles.ServerStats.FullName) < DateTime.Now - serverRankingCacheInvalidationPeriod then
-                let serverStatsInJson = ServerRegistry.Serialize serverStats
+            let serverStatsInJson = ServerRegistry.Serialize serverStats
 
-                // it is assumed that SaveToDisk is being run under a lock() block
-                File.WriteAllText (cacheFiles.ServerStats.FullName, serverStatsInJson)
+            // it is assumed that SaveToDisk is being run under a lock() block
+            File.WriteAllText (cacheFiles.ServerStats.FullName, serverStatsInJson)
 
-                match LoadFromDiskInternal<ServerRanking> cacheFiles.ServerStats with
-                | None -> failwith "should return something after having saved it"
-                | Some cleansedServerStats -> cleansedServerStats
-            else
-                serverStats
+            match LoadFromDiskInternal<ServerRanking> cacheFiles.ServerStats with
+            | None -> failwith "should return something after having saved it"
+            | Some cleansedServerStats -> cleansedServerStats
 
         let InitServers (lastServerStats: ServerRanking) =
             let mergedServers = ServerRegistry.MergeWithBaseline lastServerStats
@@ -321,6 +315,11 @@ module Caching =
                                                         currency
                                                         address
                                                         newCache))
+
+        // When saving server rankings to disk, removal of duplicates and serializing/deserializing is performed,
+        // which puts load on CPU. This is acceptable for geewallet, since request rate is low, but not for
+        // ElectrumProxy, which has to process hundreds of request at a time.
+        member val SaveServerRankingsToDiskOnEachUpdate = true with get, set
 
         member __.ClearAll () =
             SaveNetworkDataToDisk CachedNetworkData.Empty
@@ -528,7 +527,7 @@ module Caching =
             if transactionCurrency <> feeCurrency && (not Config.EthTokenEstimationCouldBeBuggyAsInNotAccurate) then
                 self.StoreTransactionRecord address feeCurrency txId feeAmount
 
-        member __.SaveServerLastStat (serverMatchFunc: ServerDetails->bool)
+        member self.SaveServerLastStat (serverMatchFunc: ServerDetails->bool)
                                      (stat: HistoryFact): unit =
             lock cacheFiles.ServerStats (fun _ ->
                 let currency,serverInfo,previousLastSuccessfulCommunication =
@@ -568,9 +567,16 @@ module Caching =
 
                 let newServerList = sessionServerRanking.Add(currency, newServersForCurrency)
 
-                let newCachedValue = SaveServerRankingsToDisk newServerList
+                let newCachedValue = 
+                    if self.SaveServerRankingsToDiskOnEachUpdate then
+                        SaveServerRankingsToDisk newServerList
+                    else
+                        newServerList
                 sessionServerRanking <- newCachedValue
             )
+
+        member __.SaveServerStatsToDisk(): unit =
+            SaveServerRankingsToDisk sessionServerRanking |> ignore<ServerRanking>
 
         member __.GetServers (currency: Currency): seq<ServerDetails> =
             lock cacheFiles.ServerStats (fun _ ->
