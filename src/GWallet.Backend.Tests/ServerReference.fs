@@ -70,9 +70,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = None
             }
-        let servers1 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithHighestPriority; yield serverWithLowestPriority })
+        let servers1 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithHighestPriority; yield serverWithLowestPriority })
         let serverDetails = ServerRegistry.Serialize servers1
 
         let serverAPos = serverDetails.IndexOf serverWithHighestPriority.ServerInfo.NetworkPath
@@ -84,9 +84,9 @@ type ServerReference() =
 
         Assert.That(serverBPos, Is.GreaterThan serverAPos, "shouldn't be sorted #1")
 
-        let servers2 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithLowestPriority; yield serverWithHighestPriority })
+        let servers2 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithLowestPriority; yield serverWithHighestPriority })
         let serverDetailsReverse = ServerRegistry.Serialize servers2
 
         let serverAPos = serverDetailsReverse.IndexOf serverWithHighestPriority.ServerInfo.NetworkPath
@@ -119,9 +119,9 @@ type ServerReference() =
                 CommunicationHistory = None
             }
 
-        let servers1 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithNoLastConnection; yield serverWithRecentConnectionInfo })
+        let servers1 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithNoLastConnection; yield serverWithRecentConnectionInfo })
         let serverDetails1 = ServerRegistry.Serialize servers1
 
         let serverAPos = serverDetails1.IndexOf serverWithNoLastConnection.ServerInfo.NetworkPath
@@ -133,9 +133,9 @@ type ServerReference() =
 
         Assert.That(serverAPos, Is.GreaterThan serverBPos, "should be sorted #1")
 
-        let servers2 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithRecentConnectionInfo; yield serverWithNoLastConnection })
+        let servers2 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithRecentConnectionInfo; yield serverWithNoLastConnection })
         let serverDetails2 = ServerRegistry.Serialize servers2
 
         let serverAPos = serverDetails2.IndexOf serverWithNoLastConnection.ServerInfo.NetworkPath
@@ -167,9 +167,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = CreateHistoryInfoWithLsc DateTime.Now
             }
-        let servers1 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithOldestConnection; yield serverWithMostRecentConnection })
+        let servers1 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithOldestConnection; yield serverWithMostRecentConnection })
         let serverDetails = ServerRegistry.Serialize servers1
 
         let serverAPos = serverDetails.IndexOf serverWithOldestConnection.ServerInfo.NetworkPath
@@ -181,9 +181,9 @@ type ServerReference() =
 
         Assert.That(serverAPos, Is.GreaterThan serverBPos, "should be sorted #1")
 
-        let servers2 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithMostRecentConnection; yield serverWithOldestConnection })
+        let servers2 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithMostRecentConnection; yield serverWithOldestConnection })
         let serverDetailsReverse = ServerRegistry.Serialize servers2
 
         let serverAPos = serverDetailsReverse.IndexOf serverWithOldestConnection.ServerInfo.NetworkPath
@@ -215,9 +215,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = CreateHistoryInfoWithSpan (TimeSpan.FromSeconds 1.0)
             }
-        let servers1 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithWorstConnectionSpan; yield serverWithBestConnectionSpan })
+        let servers1 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithWorstConnectionSpan; yield serverWithBestConnectionSpan })
         let serverDetails = ServerRegistry.Serialize servers1
 
         let serverAPos = serverDetails.IndexOf serverWithWorstConnectionSpan.ServerInfo.NetworkPath
@@ -229,9 +229,9 @@ type ServerReference() =
 
         Assert.That(serverAPos, Is.GreaterThan serverBPos, "should be sorted #1")
 
-        let servers2 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithBestConnectionSpan; yield serverWithWorstConnectionSpan })
+        let servers2 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithBestConnectionSpan; yield serverWithWorstConnectionSpan })
         let serverDetailsReverse = ServerRegistry.Serialize servers2
 
         let serverAPos = serverDetailsReverse.IndexOf serverWithWorstConnectionSpan.ServerInfo.NetworkPath
@@ -263,9 +263,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = CreateHistoryInfoWithSpan (TimeSpan.FromSeconds 1.0)
             }
-        let servers1 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithBadConnectionSpan; yield serverWithGoodConnectionSpan })
+        let servers1 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithBadConnectionSpan; yield serverWithGoodConnectionSpan })
         let serverDetails = ServerRegistry.Serialize servers1
 
         let serverAPos = serverDetails.IndexOf serverWithBadConnectionSpan.ServerInfo.NetworkPath
@@ -277,9 +277,9 @@ type ServerReference() =
 
         Assert.That(serverAPos, Is.GreaterThan serverBPos, "should be sorted #1")
 
-        let servers2 = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithGoodConnectionSpan; yield serverWithBadConnectionSpan })
+        let servers2 = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithGoodConnectionSpan; yield serverWithBadConnectionSpan })
         let serverDetailsReverse = ServerRegistry.Serialize servers2
 
         let serverAPos = serverDetailsReverse.IndexOf serverWithBadConnectionSpan.ServerInfo.NetworkPath
@@ -303,9 +303,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = CreateHistoryInfoWithLsc now
             }
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithSomeRecentConnection })
+        let servers = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithSomeRecentConnection })
         let serverDetails = ServerRegistry.Serialize servers
 
         let dayPos = serverDetails.IndexOf (now.Day.ToString())
@@ -334,9 +334,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = CreateHistoryInfoWithLsc DateTime.UtcNow
             }
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithSomeRecentConnection })
+        let servers = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithSomeRecentConnection })
         let serverDetails = ServerRegistry.Serialize servers
 
         let deserializedServerDetails = JsonConvert.DeserializeObject serverDetails
@@ -354,9 +354,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = None
              }
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverWithSomeRecentConnection })
+        let servers = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq { yield serverWithSomeRecentConnection })
         let serverDetails = ServerRegistry.Serialize servers
 
         let portPos = serverDetails.IndexOf (port.ToString())
@@ -430,9 +430,9 @@ type ServerReference() =
                                             dummy_now)
              }
 
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                 seq {
+        let servers = ServerRanking.Empty.AddAllServers
+                                dummy_currency_because_irrelevant_for_this_test
+                                (seq {
                                      yield tcpServerWithNoHistory
                                      yield httpSuccessfulServer
                                      yield httpsFailureServer1
@@ -441,7 +441,7 @@ type ServerReference() =
         let serverDetails = ServerRegistry.Serialize servers
 
         let deserializedServers =
-            ((ServerRegistry.Deserialize serverDetails).TryFind dummy_currency_because_irrelevant_for_this_test).Value
+            ((ServerRegistry.Deserialize serverDetails).TryGetForCurrency dummy_currency_because_irrelevant_for_this_test).Value
                 |> List.ofSeq
         Assert.That(deserializedServers.Length, Is.EqualTo 4)
 
@@ -530,9 +530,9 @@ type ServerReference() =
                     }
                 CommunicationHistory = CreateHistoryInfoWithLsc dummy_now
             }
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test,
-                                seq { yield serverA } |> ServerRegistry.AddServer serverB)
+        let servers = 
+            (ServerRanking.Empty.AddServer dummy_currency_because_irrelevant_for_this_test serverA)
+                 .AddServer dummy_currency_because_irrelevant_for_this_test serverB
 
         let serversForCurrency = servers.[dummy_currency_because_irrelevant_for_this_test]
         
@@ -559,28 +559,29 @@ type ServerReference() =
                 CommunicationHistory = None
             }
 
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test, 
-                                 seq { yield serverA } |> ServerRegistry.AddServer serverB)
+        let servers = 
+            (ServerRanking.Empty.AddServer dummy_currency_because_irrelevant_for_this_test serverA) 
+                .AddServer dummy_currency_because_irrelevant_for_this_test serverB
 
         let serversForCurrency = servers.[dummy_currency_because_irrelevant_for_this_test]
         
         Assert.That(serversForCurrency |> Seq.length, Is.EqualTo 2)
 
     member private __.SerializeAndDeserialize (serverA: ServerDetails) (serverB: ServerDetails): List<ServerDetails> =
-        let servers = seq { yield serverA } |> ServerRegistry.AddServer serverB
-        let serverRanking = Map.empty.Add (dummy_currency_because_irrelevant_for_this_test, servers)
+        let serverRanking = 
+            (ServerRanking.Empty.AddServer dummy_currency_because_irrelevant_for_this_test serverA) 
+                .AddServer dummy_currency_because_irrelevant_for_this_test serverB
         let serverDetails = ServerRegistry.Serialize serverRanking
-        ((ServerRegistry.Deserialize serverDetails).TryFind dummy_currency_because_irrelevant_for_this_test).Value
+        ((ServerRegistry.Deserialize serverDetails).TryGetForCurrency dummy_currency_because_irrelevant_for_this_test).Value
             |> List.ofSeq
 
     member private __.Merge (serverA: ServerDetails) (serverB: ServerDetails): List<ServerDetails> =
         let serverRankingA =
-            Map.empty.Add (dummy_currency_because_irrelevant_for_this_test, seq { yield serverA })
+            ServerRanking.Empty.AddServer dummy_currency_because_irrelevant_for_this_test serverA
         let serverRankingB =
-            Map.empty.Add (dummy_currency_because_irrelevant_for_this_test, seq { yield serverB })
-        let mergedServerRanking = ServerRegistry.Merge serverRankingA serverRankingB
-        (mergedServerRanking.TryFind dummy_currency_because_irrelevant_for_this_test)
+            ServerRanking.Empty.AddServer dummy_currency_because_irrelevant_for_this_test serverB
+        let mergedServerRanking = serverRankingA.Merge serverRankingB
+        (mergedServerRanking.TryGetForCurrency dummy_currency_because_irrelevant_for_this_test)
             .Value
             |> List.ofSeq
 
@@ -747,11 +748,13 @@ type ServerReference() =
                 CommunicationHistory = None
             }
 
-        let servers = Map.empty.Add
-                                (dummy_currency_because_irrelevant_for_this_test, seq { yield serverA; yield serverB })
+        let servers = 
+            ServerRanking.Empty.AddAllServers
+                dummy_currency_because_irrelevant_for_this_test
+                (seq { yield serverA; yield serverB })
         let serverDetails = ServerRegistry.Serialize servers
         let deserializedServers =
-            ((ServerRegistry.Deserialize serverDetails).TryFind dummy_currency_because_irrelevant_for_this_test).Value
+            ((ServerRegistry.Deserialize serverDetails).TryGetForCurrency dummy_currency_because_irrelevant_for_this_test).Value
                 |> List.ofSeq
 
         Assert.That(deserializedServers.Length, Is.EqualTo 1)

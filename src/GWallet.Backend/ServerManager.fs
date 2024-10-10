@@ -31,10 +31,10 @@ module ServerManager =
         let eyeBtcServers = UtxoCoin.ElectrumServerSeedList.ExtractServerListFromWebPage btc
 
         let baseLineBtcServers =
-            match baseLineServers.TryGetValue btc with
-            | true,baseLineBtcServers ->
+            match baseLineServers.TryGetForCurrency btc with
+            | Some baseLineBtcServers ->
                 baseLineBtcServers
-            | false,_ ->
+            | None ->
                 failwith <| SPrintF1 "There should be some %A servers as baseline" btc
 
         let allBtcServers = Seq.append electrumBtcServers eyeBtcServers
@@ -46,10 +46,10 @@ module ServerManager =
         let eyeLtcServers = UtxoCoin.ElectrumServerSeedList.ExtractServerListFromWebPage ltc
 
         let baseLineLtcServers =
-            match baseLineServers.TryGetValue ltc with
-            | true,baseLineLtcServers ->
+            match baseLineServers.TryGetForCurrency ltc with
+            | Some baseLineLtcServers ->
                 baseLineLtcServers
-            | false,_ ->
+            | None ->
                 failwith <| SPrintF1 "There should be some %A servers as baseline" ltc
 
         let allLtcServers = Seq.append electrumLtcServers eyeLtcServers
@@ -70,8 +70,9 @@ module ServerManager =
                 ()
 
         let allCurrenciesServers =
-            baseLineServers.Add(Currency.BTC, allBtcServers)
-                           .Add(Currency.LTC, allLtcServers)
+            (baseLineServers
+                .AddAllServers Currency.BTC allBtcServers)
+                .AddAllServers Currency.LTC allLtcServers
 
         let allServersJson = ServerRegistry.Serialize allCurrenciesServers
         File.WriteAllText(ServerRegistry.ServersEmbeddedResourceFileName, allServersJson)

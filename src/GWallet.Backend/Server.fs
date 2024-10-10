@@ -72,42 +72,35 @@ type ServerDetails =
                 | None -> None
                 | Some (h,_) -> Some h
 
-type ServerRanking = Map<Currency,seq<ServerDetails>>
+type ServerRanking = 
+    private {
+        Ranking: Map<Currency, array<ServerDetails>>
+    }
+    with
+        static member Empty = { Ranking = Map.empty }
 
-module ServerRegistry =
+        member self.Item with get(currency: Currency) = self.Ranking.[currency] :> seq<ServerDetails>
 
-    let ServersEmbeddedResourceFileName = "servers.json"
+        member self.TryGetForCurrency(currency: Currency) = 
+            self.Ranking.TryFind currency 
+            |> Option.map(fun arr -> arr :> seq<ServerDetails>)
 
-    let internal TryFindValue (map: ServerRanking) (serverPredicate: ServerDetails -> bool)
-                                  : Option<Currency*ServerDetails> =
-        let rec tryFind currencyAndServers server =
-            match currencyAndServers with
-            | [] -> None
-            | (currency, servers)::tail ->
-                match Seq.tryFind serverPredicate servers with
-                | None -> tryFind tail server
-                | Some foundServer -> Some (currency, foundServer)
-        let listMap = Map.toList map
-        tryFind listMap serverPredicate
+        interface Collections.Generic.IEnumerable<Collections.Generic.KeyValuePair<Currency, seq<ServerDetails>>> with
+            member self.GetEnumerator(): Collections.Generic.IEnumerator<Collections.Generic.KeyValuePair<Currency,ServerDetails seq>> = 
+                (seq { for KeyValue(k, v) in self.Ranking -> Collections.Generic.KeyValuePair(k, v :> seq<ServerDetails>) }).GetEnumerator()
 
-    let AddServer (newServer: ServerDetails) (servers: seq<ServerDetails>) : seq<ServerDetails> =
-        let serversArray = Seq.toArray servers
-        match Array.tryFindIndex (fun each -> each.ServerInfo.NetworkPath = newServer.ServerInfo.NetworkPath) serversArray with
-        | Some index ->
-            let existingServer = serversArray.[index]
-            match newServer.CommunicationHistory, existingServer.CommunicationHistory with
-            | None, _ -> ()
-            | _, None -> 
-                serversArray.[index] <- newServer
-            | Some (_, newLastComm),Some (_, existingLastCommInMap) when newLastComm > existingLastCommInMap ->
-                serversArray.[index] <- newServer
-            | _ -> ()
-            serversArray :> seq<ServerDetails>
-        | None -> 
-            Array.append serversArray (Array.singleton newServer) :> seq<ServerDetails>
+            member self.GetEnumerator(): Collections.IEnumerator = 
+                (self :> Collections.Generic.IEnumerable<_>).GetEnumerator()
 
-    let internal RemoveBlackListed (cs: Currency*seq<ServerDetails>): seq<ServerDetails> =
-        let isBlackListed currency server =
+        member internal self.TryFindValue (serverPredicate: ServerDetails -> bool) : Option<Currency*ServerDetails> =
+            self.Ranking 
+            |> Map.tryPick 
+                (fun currency servers -> 
+                    servers 
+                    |> Array.tryFind serverPredicate
+                    |> Option.map (fun server -> (currency, server)) )
+        
+        member private self.IsBlackListed currency server =
             // as these servers can only serve very limited set of queries (e.g. only balance?) their stats are skewed and
             // they create exception when being queried for advanced ones (e.g. latest block)
             server.ServerInfo.NetworkPath.Contains "blockscout" ||
@@ -118,79 +111,86 @@ module ServerRegistry =
             // there was a typo when adding this server to our servers.json file, see commit 69d90fd2fc22a1f3dd9ef8793f0cd42e3b540df1
             || (currency = Currency.ETC && server.ServerInfo.NetworkPath.Contains "ethercluster.comx/")
 
-        let currency,servers = cs
-        Seq.filter (fun server -> not (isBlackListed currency server)) servers
+        member self.AddServer (currency: Currency) (newServer: ServerDetails) : ServerRanking =
+            if self.IsBlackListed currency newServer then
+                self
+            else
+                let servers = 
+                    match self.Ranking.TryFind currency with
+                    | Some value -> value
+                    | None -> Array.empty
 
-    let RemoveCruft (cs: Currency*seq<ServerDetails>): seq<ServerDetails> =
-        cs |> RemoveBlackListed
+                let updatedServers =
+                    match Array.tryFindIndex (fun each -> each.ServerInfo.NetworkPath = newServer.ServerInfo.NetworkPath) servers with
+                    | Some index ->
+                        let existingServer = servers.[index]
+                        match newServer.CommunicationHistory, existingServer.CommunicationHistory with
+                        | None, _ -> ()
+                        | _, None -> 
+                            servers.[index] <- newServer
+                        | Some (_, newLastComm),Some (_, existingLastComm) when newLastComm > existingLastComm ->
+                            servers.[index] <- newServer
+                        | _ -> ()
+                        servers
+                    | None -> 
+                        Array.append servers [| newServer |]
 
-    let internal Sort (servers: seq<ServerDetails>): seq<ServerDetails> =
-        let sort server =
-            let invertOrder (timeSpan: TimeSpan): int =
-                0 - int timeSpan.TotalMilliseconds
-            match server.CommunicationHistory with
-            | None -> None
-            | Some (history, lastComm) ->
-                match history.Status with
-                | Fault faultInfo ->
-                    let success = false
-                    match faultInfo.LastSuccessfulCommunication with
-                    | None -> Some (success, invertOrder history.TimeSpan, None)
-                    | Some lsc -> Some (success, invertOrder history.TimeSpan, Some lsc)
-                | Success ->
-                    let success = true
-                    Some (success, invertOrder history.TimeSpan, Some lastComm)
+                { Ranking = self.Ranking |> Map.add currency updatedServers }
 
-        Seq.sortByDescending sort servers
+        member self.AddAllServers (currency: Currency) (newServers: seq<ServerDetails>) : ServerRanking =
+            Seq.fold
+                (fun currRanking server -> currRanking.AddServer currency server)
+                self
+                newServers
+
+        member self.Merge(other: ServerRanking) : ServerRanking =
+            Seq.fold
+                (fun ranking (currency, servers) -> ranking.AddAllServers currency servers)
+                self
+                (other.Ranking |> Map.toSeq)
+
+        member self.Sorted() : ServerRanking =
+            let sort server =
+                let invertOrder (timeSpan: TimeSpan): int =
+                    0 - int timeSpan.TotalMilliseconds
+                match server.CommunicationHistory with
+                | None -> None
+                | Some (history, lastComm) ->
+                    match history.Status with
+                    | Fault faultInfo ->
+                        let success = false
+                        match faultInfo.LastSuccessfulCommunication with
+                        | None -> Some (success, invertOrder history.TimeSpan, None)
+                        | Some lsc -> Some (success, invertOrder history.TimeSpan, Some lsc)
+                    | Success ->
+                        let success = true
+                        Some (success, invertOrder history.TimeSpan, Some lastComm)
+
+            { Ranking = self.Ranking |> Map.map (fun _ servers -> Array.sortByDescending sort servers) }
+
+        member self.Serialize(): string =
+            self.Sorted().Ranking
+            |> Map.map (fun _ servers -> servers |> Array.toSeq)
+            |> Marshalling.Serialize
+
+        static member Deserialize(json: string): ServerRanking =
+            { Ranking = Marshalling.Deserialize json |> Map.map (fun _ servers -> servers |> Array.ofSeq) }
+
+module ServerRegistry =
+
+    let ServersEmbeddedResourceFileName = "servers.json"
 
     let Serialize(servers: ServerRanking): string =
-        let rearrangedServers =
-            servers
-            |> Map.toSeq
-            |> Seq.map (fun (currency, servers) -> currency, ((currency,servers) |> RemoveCruft |> Sort))
-            |> Map.ofSeq
-        Marshalling.Serialize rearrangedServers
+        servers.Serialize()
 
     let Deserialize(json: string): ServerRanking =
-        Marshalling.Deserialize json
-
-    let Merge (ranking1: ServerRanking) (ranking2: ServerRanking): ServerRanking =
-        let allKeys =
-            seq {
-                for KeyValue(key, _) in ranking1 do
-                    yield key
-                for KeyValue(key, _) in ranking2 do
-                    yield key
-            } |> Set.ofSeq
-
-        seq {
-            for currency in allKeys do
-                let allServersFrom1 =
-                    match ranking1.TryFind currency with
-                    | None -> Seq.empty
-                    | Some servers -> servers
-                let allServersFrom2 =
-                    match ranking2.TryFind currency with
-                    | None -> Seq.empty
-                    | Some servers ->
-                        servers
-                let mergedServers = 
-                    Seq.fold 
-                        (fun servers newServer -> AddServer newServer servers)
-                        allServersFrom1
-                        allServersFrom2
-                let allServers = (currency, mergedServers)
-                                 |> RemoveCruft
-                                 |> Sort
-
-                yield currency, allServers
-        } |> Map.ofSeq
+        ServerRanking.Deserialize json
 
     let private ServersRankingBaseline =
         Deserialize (Fsdk.Misc.ExtractEmbeddedResourceFileContents ServersEmbeddedResourceFileName)
 
     let MergeWithBaseline (ranking: ServerRanking): ServerRanking =
-        Merge ranking ServersRankingBaseline
+        ranking.Merge ServersRankingBaseline
 
 [<CustomEquality; NoComparison>]
 type Server<'K,'R when 'K: equality and 'K :> ICommunicationHistory> =

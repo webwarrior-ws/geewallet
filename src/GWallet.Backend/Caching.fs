@@ -147,7 +147,7 @@ module Caching =
         let maybeServerStats = LoadFromDiskInternal<ServerRanking> files.ServerStats
         match maybeServerStats with
         | None ->
-            maybeFirstRun,resultingNetworkData,Map.empty
+            maybeFirstRun,resultingNetworkData,ServerRanking.Empty
         | Some serverStats ->
             false,resultingNetworkData,serverStats
 
@@ -323,7 +323,7 @@ module Caching =
 
         member __.ClearAll () =
             SaveNetworkDataToDisk CachedNetworkData.Empty
-            SaveServerRankingsToDisk Map.empty
+            SaveServerRankingsToDisk ServerRanking.Empty
             |> ignore<ServerRanking>
 
         member __.SaveSnapshot(newDietCachedData: DietCache) =
@@ -531,7 +531,7 @@ module Caching =
                                      (stat: HistoryFact): unit =
             lock cacheFiles.ServerStats (fun _ ->
                 let currency,serverInfo,previousLastSuccessfulCommunication =
-                    match ServerRegistry.TryFindValue sessionServerRanking serverMatchFunc with
+                    match sessionServerRanking.TryFindValue serverMatchFunc with
                     | None ->
                         failwith "Merge&Save didn't happen before launching the FaultTolerantPClient?"
                     | Some (currency,server) ->
@@ -557,14 +557,8 @@ module Caching =
                         ServerInfo = serverInfo
                         CommunicationHistory = Some newHistoryInfo
                     }
-                let serversForCurrency =
-                    match sessionServerRanking.TryFind currency with
-                    | None -> Seq.empty
-                    | Some servers -> servers
 
-                let newServersForCurrency = ServerRegistry.AddServer newServerDetails serversForCurrency
-
-                let newServerList = sessionServerRanking.Add(currency, newServersForCurrency)
+                let newServerList = sessionServerRanking.AddServer currency newServerDetails
 
                 let newCachedValue = 
                     if self.SaveServerRankingsToDiskOnEachUpdate then
@@ -579,7 +573,7 @@ module Caching =
 
         member __.GetServers (currency: Currency): seq<ServerDetails> =
             lock cacheFiles.ServerStats (fun _ ->
-                match sessionServerRanking.TryFind currency with
+                match sessionServerRanking.TryGetForCurrency currency with
                 | None ->
                     failwith <| SPrintF1 "Initialization of servers' cache failed? currency %A not found" currency
                 | Some servers -> servers
