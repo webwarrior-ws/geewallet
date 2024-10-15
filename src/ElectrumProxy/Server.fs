@@ -21,8 +21,17 @@ type PascalCaseToSnakeCaseNamingPolicy() =
 
 let supportedProtocolVersion = "1.3"
 
-let private Query<'R when 'R: equality> (job: Async<UtxoCoin.StratumClient>->Async<'R>) : Async<'R> =
+let ScriptHashToAddress (scriptHash: string) =
+    let scriptId = NBitcoin.WitScriptId scriptHash
+    scriptId.GetAddress NBitcoin.Network.Main
+
+let private QueryElectrum<'R when 'R: equality> (job: Async<UtxoCoin.StratumClient>->Async<'R>) : Async<'R> =
     UtxoCoin.Server.Query Currency.BTC (UtxoCoin.QuerySettings.Default ServerSelectionMode.Fast) job None
+
+let private QueryMultiple<'K, 'R when 'R: equality and 'K: equality and 'K :> ICommunicationHistory> 
+    (electrumJob: Async<UtxoCoin.StratumClient>->Async<'R>) 
+    (additionalServers: List<Server<'K,'R>>) : Async<'R> =
+    raise <| NotImplementedException()
 
 type ElectrumProxyServer() as self =
     static let blockchainHeadersSubscriptionInterval = TimeSpan.FromMinutes 1.0
@@ -57,7 +66,7 @@ type ElectrumProxyServer() as self =
 
     [<JsonRpcMethod("blockchain.block.header")>]
     member self.BlockchainBlockHeader (height: uint64) : Task<string> =
-        Query
+        QueryElectrum
             (fun asyncClient -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainBlockHeader height
@@ -67,7 +76,7 @@ type ElectrumProxyServer() as self =
 
     [<JsonRpcMethod("blockchain.block.headers")>]
     member self.BlockchainBlockHeaders (start_height: uint64) (count: uint64) : Task<UtxoCoin.BlockchainBlockHeadersInnerResult> =
-        Query
+        QueryElectrum
             (fun asyncClient -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainBlockHeaders start_height count
@@ -77,7 +86,7 @@ type ElectrumProxyServer() as self =
 
     [<JsonRpcMethod("blockchain.scripthash.get_history")>]
     member self.BlockchainScripthashGetHistory (scripthash: string) : Task<array<UtxoCoin.BlockchainScriptHashGetHistoryInnerResult>> =
-        Query
+        QueryElectrum
             (fun asyncClient -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainScriptHashGetHistory scripthash
@@ -86,7 +95,7 @@ type ElectrumProxyServer() as self =
         |> Async.StartAsTask
 
     member private self.GetBlockchainTip() : Async<UtxoCoin.BlockchainHeadersSubscribeInnerResult> =
-        Query
+        QueryElectrum
             (fun asyncClient -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainHeadersSubscribe()
@@ -104,7 +113,7 @@ type ElectrumProxyServer() as self =
 
     [<JsonRpcMethod("blockchain.transaction.get")>]
     member self.BlockchainTransactionGet (txHash: string) : Task<string> =
-        Query
+        QueryElectrum
             (fun asyncClient -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainTransactionGet txHash
@@ -114,7 +123,7 @@ type ElectrumProxyServer() as self =
 
     [<JsonRpcMethod("blockchain.transaction.broadcast")>]
     member self.BlockchainTransactionBroadcast (rawTx: string) : Task<string> =
-        Query
+        QueryElectrum
             (fun asyncClient -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainTransactionBroadcast rawTx
