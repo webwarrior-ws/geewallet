@@ -28,10 +28,18 @@ let ScriptHashToAddress (scriptHash: string) =
 let private QueryElectrum<'R when 'R: equality> (job: Async<UtxoCoin.StratumClient>->Async<'R>) : Async<'R> =
     UtxoCoin.Server.Query Currency.BTC (UtxoCoin.QuerySettings.Default ServerSelectionMode.Fast) job None
 
-let private QueryMultiple<'K, 'R when 'R: equality and 'K: equality and 'K :> ICommunicationHistory> 
+let private QueryMultiple<'R when 'R: equality> 
     (electrumJob: Async<UtxoCoin.StratumClient>->Async<'R>) 
-    (additionalServers: List<Server<'K,'R>>) : Async<'R> =
-    raise <| NotImplementedException()
+    (additionalServers: List<Server<ServerDetails,'R>>) : Async<'R> =
+    let faultTolerantClient =
+        FaultTolerantParallelClient<ServerDetails,ServerDiscardedException> Caching.Instance.SaveServerLastStat
+    let query = faultTolerantClient.Query 
+    let querySettings = UtxoCoin.Server.FaultTolerantParallelClientDefaultSettings ServerSelectionMode.Fast None
+    query
+        querySettings
+        (List.append
+            (UtxoCoin.Server.GetRandomizedFuncs Currency.BTC electrumJob)
+            additionalServers)
 
 type ElectrumProxyServer() as self =
     static let blockchainHeadersSubscriptionInterval = TimeSpan.FromMinutes 1.0
@@ -86,12 +94,32 @@ type ElectrumProxyServer() as self =
 
     [<JsonRpcMethod("blockchain.scripthash.get_history")>]
     member self.BlockchainScripthashGetHistory (scripthash: string) : Task<array<UtxoCoin.BlockchainScriptHashGetHistoryInnerResult>> =
-        QueryElectrum
-            (fun asyncClient -> async {
+        let electrumJob = 
+            (fun (asyncClient: Async<UtxoCoin.StratumClient>) -> async {
                 let! client = asyncClient
                 let! result = client.BlockchainScriptHashGetHistory scripthash
                 return result.Result
             } )
+        let bitcoreNodeServer: Server<ServerDetails, array<UtxoCoin.BlockchainScriptHashGetHistoryInnerResult>> =
+            let networkAddress = "https://api.bitcore.io"
+            {
+                Details = { 
+                    ServerInfo = { 
+                        NetworkPath = networkAddress
+                        ConnectionType = { ConnectionType.Encrypted = true; Protocol = Protocol.Http } 
+                    } 
+                    CommunicationHistory = None
+                }
+                Retrieval = async {
+                    use client = new BitcoreNodeClient(networkAddress)
+                    let address = ScriptHashToAddress scripthash
+                    return! client.GetAddressTransactions (address.ToString())
+                }
+            }
+            
+        QueryMultiple
+            electrumJob
+            (List.singleton bitcoreNodeServer)
         |> Async.StartAsTask
 
     member private self.GetBlockchainTip() : Async<UtxoCoin.BlockchainHeadersSubscribeInnerResult> =

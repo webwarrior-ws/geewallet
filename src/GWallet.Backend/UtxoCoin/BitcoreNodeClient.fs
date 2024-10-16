@@ -1,4 +1,4 @@
-﻿namespace GWallet.Backend.BitcoreNodeClient
+﻿namespace GWallet.Backend
 
 open System
 open System.Net.Http
