@@ -4,6 +4,8 @@ open System
 open System.Net.Http
 open System.Text.Json
 
+open Fsdk.FSharpUtil
+
 open GWallet.Backend
 open GWallet.Backend.UtxoCoin
 open GWallet.Backend.FSharpUtil.UwpHacks
@@ -11,24 +13,44 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 
 // https://github.com/bitpay/bitcore/blob/master/packages/bitcore-node/docs/api-documentation.md
 type BitcoreNodeClient(serverAddress: string) =
-    let httpClient = new HttpClient(BaseAddress=Uri serverAddress)
+    let httpClient = new HttpClient(BaseAddress=Uri serverAddress, Timeout=Config.DEFAULT_NETWORK_TIMEOUT)
+
+    let mutable lastRequestTime = DateTime.Now
+    let minTimeBetweenRequests = 0.1
+    let semaphore = new System.Threading.SemaphoreSlim(1)
 
     interface IDisposable with
         override self.Dispose (): unit = 
             httpClient.Dispose()
+            semaphore.Dispose()
     
     member private self.Request(request: string): Async<string> =
         async {
             try
-                return! httpClient.GetStringAsync request |> Async.AwaitTask
+                try
+                    do! semaphore.WaitAsync() |> Async.AwaitTask
+                    let diff = (DateTime.Now - lastRequestTime).TotalSeconds
+                    if diff < minTimeBetweenRequests then
+                        do! Async.Sleep <| int ((minTimeBetweenRequests - diff) * 1000.0)
+                    let! result = httpClient.GetStringAsync request |> Async.AwaitTask
+                    lastRequestTime <- DateTime.Now
+                    return result
+                finally
+                    semaphore.Release() |> ignore
             with
-            | :? HttpRequestException as ex ->
-                // maybe only discard server on several specific errors?
-                let msg = SPrintF2 "%s: %s" (ex.GetType().FullName) ex.Message
-                return raise <| ServerDiscardedException(msg, ex)
-            | :? Threading.Tasks.TaskCanceledException as ex ->
-                let msg = SPrintF1 "Timeout: %s" ex.Message
-                return raise <| ServerDiscardedException(msg, ex)
+            | ex ->
+                match FindException<HttpRequestException> ex with
+                | Some httpRequestExn ->
+                    // maybe only discard server on several specific errors?
+                    let msg = SPrintF2 "%s: %s" (httpRequestExn.GetType().FullName) httpRequestExn.Message
+                    return raise <| ServerDiscardedException(msg, httpRequestExn)
+                | _ -> ()
+                match FindException<Threading.Tasks.TaskCanceledException> ex with
+                | Some taskCancelledExn ->
+                    let msg = SPrintF1 "Timeout: %s" taskCancelledExn.Message
+                    return raise <| ServerDiscardedException(msg, taskCancelledExn)
+                | _ -> ()
+                return raise (ReRaise ex)
         }
 
     member self.GetAddressTransactions(address: string): Async<array<BlockchainScriptHashGetHistoryInnerResult>> =

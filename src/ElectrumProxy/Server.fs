@@ -31,8 +31,12 @@ let private QueryElectrum<'R when 'R: equality> (job: Async<UtxoCoin.StratumClie
 let private QueryMultiple<'R when 'R: equality> 
     (electrumJob: Async<UtxoCoin.StratumClient>->Async<'R>) 
     (additionalServers: List<Server<ServerDetails,'R>>) : Async<'R> =
+    let updateServer serverMatchFunc stat =
+        if additionalServers |> List.exists (fun each -> serverMatchFunc each.Details) |> not then
+            Caching.Instance.SaveServerLastStat serverMatchFunc stat
+        
     let faultTolerantClient =
-        FaultTolerantParallelClient<ServerDetails,ServerDiscardedException> Caching.Instance.SaveServerLastStat
+        FaultTolerantParallelClient<ServerDetails,ServerDiscardedException> updateServer
     let query = faultTolerantClient.Query 
     let querySettings = UtxoCoin.Server.FaultTolerantParallelClientDefaultSettings ServerSelectionMode.Fast None
     query
@@ -55,9 +59,13 @@ type ElectrumProxyServer() as self =
                     let! blockchinTip = self.GetBlockchainTip()
                     blockchainHeadersSubscriptionEvent.Trigger blockchinTip
             }, cts.Token))
+
+    let bitcoreNodeAddress = "https://api.bitcore.io"
+    let bitcoreNodeClient = new BitcoreNodeClient(bitcoreNodeAddress)
     
     interface IDisposable with
         override self.Dispose() =
+            (bitcoreNodeClient :> IDisposable).Dispose()
             cts.Cancel()
 
     member self.EventNameTransform (name: string): string =
@@ -101,19 +109,17 @@ type ElectrumProxyServer() as self =
                 return result.Result
             } )
         let bitcoreNodeServer: Server<ServerDetails, array<UtxoCoin.BlockchainScriptHashGetHistoryInnerResult>> =
-            let networkAddress = "https://api.bitcore.io"
             {
                 Details = { 
                     ServerInfo = { 
-                        NetworkPath = networkAddress
+                        NetworkPath = bitcoreNodeAddress
                         ConnectionType = { ConnectionType.Encrypted = true; Protocol = Protocol.Http } 
                     } 
                     CommunicationHistory = None
                 }
                 Retrieval = async {
-                    use client = new BitcoreNodeClient(networkAddress)
                     let address = ScriptHashToAddress scripthash
-                    return! client.GetAddressTransactions (address.ToString())
+                    return! bitcoreNodeClient.GetAddressTransactions (address.ToString())
                 }
             }
             
