@@ -157,7 +157,11 @@ type internal Runner<'Resource when 'Resource: equality> =
         async {
             try
                 try
-                    let! res = server.Retrieval
+                    let timeout = 
+                        match server.Details.CommunicationHistory with
+                        | Some({ Status=Status.Fault _ }) -> TimeSpan.FromSeconds(Config.DEFAULT_NETWORK_TIMEOUT.TotalSeconds * 2.0)
+                        | _ -> Config.DEFAULT_NETWORK_TIMEOUT
+                    let! res = server.Retrieval timeout
                     return SuccessfulValue res
                 finally
                     stopwatch.Stop()

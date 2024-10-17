@@ -7,8 +7,8 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 
 module ElectrumClient =
 
-    let private Init (fqdn: string) (port: uint32): Async<StratumClient> =
-        let jsonRpcClient = new JsonRpcTcpClient(fqdn, port)
+    let private Init (fqdn: string) (port: uint32) (timeout: TimeSpan): Async<StratumClient> =
+        let jsonRpcClient = new JsonRpcTcpClient(fqdn, port, timeout)
         let stratumClient = new StratumClient(jsonRpcClient)
 
         // this is the last version of Electrum released at the time of writing this module
@@ -44,12 +44,12 @@ module ElectrumClient =
             return stratumClient
         }
 
-    let StratumServer (electrumServer: ServerDetails): Async<StratumClient> =
+    let StratumServer (electrumServer: ServerDetails) (timeout: TimeSpan): Async<StratumClient> =
         match electrumServer.ServerInfo.ConnectionType with
         | { Encrypted = true; Protocol = _ } -> failwith "Incompatibility filter for non-encryption didn't work?"
         | { Encrypted = false; Protocol = Http } -> failwith "HTTP server for UtxoCoin?"
         | { Encrypted = false; Protocol = Tcp port } ->
-            Init electrumServer.ServerInfo.NetworkPath port
+            Init electrumServer.ServerInfo.NetworkPath port timeout
 
     let GetBalances (scriptHashes: List<string>) (stratumServer: Async<StratumClient>) = async {
         // FIXME: we should rather implement this method in terms of:

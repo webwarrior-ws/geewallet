@@ -411,6 +411,7 @@ module Server =
     let Web3ServerToRetrievalFunc (server: ServerDetails)
                                   (web3ClientFunc: SomeWeb3->Async<'R>)
                                   currency
+                                  (_timeout: TimeSpan)
                                       : Async<'R> =
 
         let HandlePossibleEtherFailures (job: Async<'R>): Async<'R> =
