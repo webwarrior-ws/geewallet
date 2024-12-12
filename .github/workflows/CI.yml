@@ -35,6 +35,11 @@ jobs:
         sudo installer -pkg xamarin.ios-16.0.0.72.pkg -target /
         wget https://aka.ms/xamarin-android-commercial-d17-3-macos --output-document=xamarin.android-13.0.0.0.pkg
         sudo installer -pkg xamarin.android-13.0.0.0.pkg -target /
+    - name: Install Android 31 SDK
+      run: |
+        brew install --cask android-commandlinetools
+        echo y | sdkmanager 'build-tools;31.0.0' --sdk_root=/Users/runner/Library/Android/sdk
+        echo y | sdkmanager "platform-tools" "platforms;android-31" --sdk_root=/Users/runner/Library/Android/sdk
     - name: Check versions
       run: |
         mono --version
