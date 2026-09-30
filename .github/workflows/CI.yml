@@ -582,6 +582,21 @@ jobs:
       run: git clean -fdx && ./configure.sh && make release
     - name: integration tests
       run: make update-servers
+      
+    - name: Run Pi agent
+      if: failure()
+      uses: shaftoe/pi-coding-agent-action@v2.28.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        provider: ppq
+        model: auto
+        token: ${{ secrets.PPQ_API_KEY }}
+        extensions: |
+          npm:awto-pi-lot
+        prompt: |
+          The build has failed.
+          Analyze the failure and figure out how to install mono packages so the build doesn't fail.
+          Commit the changes that you've made to this branch.
 
   linux26-vanilla--stockdotnet-only:
     runs-on: ubuntu-26.04
@@ -757,6 +772,21 @@ jobs:
       run: git clean -fdx && ./configure.sh && make release
     - name: integration tests
       run: make update-servers
+      
+    - name: Run Pi agent
+      if: failure()
+      uses: shaftoe/pi-coding-agent-action@v2.28.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        provider: ppq
+        model: auto
+        token: ${{ secrets.PPQ_API_KEY }}
+        extensions: |
+          npm:awto-pi-lot
+        prompt: |
+          The build has failed.
+          Analyze the failure and figure out how to install mono packages so the build doesn't fail.
+          Commit the changes that you've made to this branch.
 
   linux22-github--dotnet-and-mono:
     runs-on: ubuntu-22.04
