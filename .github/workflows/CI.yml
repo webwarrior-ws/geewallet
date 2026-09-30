@@ -562,6 +562,11 @@ jobs:
     - name: install build dependencies
       run: sudo DEBIAN_FRONTEND=noninteractive apt install --yes ca-certificates-mono fsharp nunit-console
 
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22
+
     # workaround for https://github.com/actions/runner/issues/2033
     - name: ownership workaround
       run: git config --global --add safe.directory '*'
@@ -582,7 +587,7 @@ jobs:
       run: git clean -fdx && ./configure.sh && make release
     - name: integration tests
       run: make update-servers
-      
+    
     - name: Run Pi agent
       if: failure()
       uses: shaftoe/pi-coding-agent-action@v2.28.0
@@ -751,6 +756,11 @@ jobs:
       run: sudo ./scripts/install_mono_from_microsoft_deb_packages.sh
     - name: install all dependencies
       run: sudo DEBIAN_FRONTEND=noninteractive apt install --yes git make curl fsharp nunit-console
+
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22
 
     # workaround for https://github.com/actions/runner/issues/2033
     - name: ownership workaround
