@@ -562,8 +562,16 @@ jobs:
         echo "deb http://archive.ubuntu.com/ubuntu jammy universe" | sudo tee /etc/apt/sources.list.d/jammy-universe.list
         sudo apt update --yes
 
-    - name: install build dependencies
-      run: sudo DEBIAN_FRONTEND=noninteractive apt install --yes ca-certificates-mono fsharp nunit-console
+    # NOTE: we need 'mono-gac' (no longer shipped in 26.04, grabbed from jammy) installed *before*
+    # the 'fsharp' package: its postinst hook copies the F# framework files (FSharp.Core.dll,
+    # FSharp.Build.dll, Microsoft.FSharp.Targets, fsc.exe, fsi.exe...) into /usr/lib/mono/4.5/
+    # (the cli-common framework install), without which xbuild cannot build the F# projects
+    # (and 'fsharpi' is broken, too). We also pin 'mono-devel' to jammy because the 26.04 one
+    # (mono 6.14) conflicts with the jammy 'mono-xbuild' (mono 6.8) that the 'fsharp' pkg needs.
+    - name: install mono (grabbing mono-devel from jammy sources)
+      run: sudo DEBIAN_FRONTEND=noninteractive apt install --yes --allow-downgrades ca-certificates-mono mono-gac mono-xbuild mono-devel/jammy
+    - name: install F# compiler and unit test runner
+      run: sudo DEBIAN_FRONTEND=noninteractive apt install --yes fsharp nunit-console
 
     - name: Setup Node
       uses: actions/setup-node@v6
