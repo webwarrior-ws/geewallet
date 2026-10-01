@@ -764,7 +764,7 @@ jobs:
     - name: install sudo
       run: apt update && apt install --yes sudo
     - name: install last version of mono (Microsoft APT repositories)
-      run: sudo ./scripts/install_mono_from_microsoft_deb_packages.sh
+      run: sudo ./scripts/install_mono_from_microsoft_deb_packages_into_ubuntu2604.sh
     - name: install all dependencies
       run: sudo DEBIAN_FRONTEND=noninteractive apt install --yes git make curl fsharp nunit-console
 
