@@ -17,6 +17,9 @@ env:
 # assuming the binaries from previous build are good
 # (msbuild bug?)
 
+permissions:
+  contents: write
+
 jobs:
   macOS--dotnet-and-mono:
     runs-on: macOS-14
