@@ -61,6 +61,17 @@ type FrontendApp =
     override self.ToString() =
         sprintf "%A" self
 
+#if !LEGACY_FRAMEWORK
+// this needs to match with <TargetFramework>foo</TargetFramework> (where `foo` can't be `netstandard2.0` because it's not a lib)
+// and NOTE: please try to keep this in sync with CI.yml's DOTNET_VERSION constant
+let DOTNET_VERSION =
+    // format: X.Y (can't be X.Y.Z here)
+    "6.0"
+
+let AllowUsingNewerVersionsOfDotNet() =
+    Environment.SetEnvironmentVariable("DOTNET_ROLL_FORWARD", "major")
+#endif
+
 type BinaryConfig =
     | Debug
     | Release
@@ -171,6 +182,48 @@ let PrintNugetVersion () =
             Console.WriteLine()
             Console.Out.Flush()
             failwith "nuget process' output contained errors ^"
+<<<<<<< HEAD
+=======
+#else
+
+let BuildScripts() =
+    let rec FindFsxFiles (dir: DirectoryInfo): seq<FileInfo> =
+        seq {
+            for file in dir.EnumerateFiles("*.fsx") do
+                yield file
+            for subDir in dir.EnumerateDirectories() do
+                if subDir.Name <> ".git" &&
+                   subDir.Name <> "obj" &&
+                   subDir.Name <> "bin" &&
+                   subDir.Name <> "packages" then
+                    yield! (FindFsxFiles subDir)
+        }
+
+    let toolManifest = FileInfo (Path.Combine (FsxHelper.RootDir.FullName, ".config", "dotnet-tools.json"))
+    let rootManifest = FileInfo (Path.Combine (FsxHelper.RootDir.FullName, "dotnet-tools.json"))
+    if not toolManifest.Exists && not rootManifest.Exists then
+        Process.Execute(
+            { Command = "dotnet"; Arguments = "new tool-manifest" },
+            Echo.All
+        ).UnwrapDefault() |> ignore<string>
+
+    // we need to install specific version because of this bug: https://github.com/dotnet/sdk/issues/24037
+    Process.Execute(
+        { Command = "dotnet"; Arguments = "tool install fsxc --version 0.5.9.1" },
+        Echo.All
+    ).UnwrapDefault() |> ignore<string>
+
+    // fsxc was built with .NET6.x
+    AllowUsingNewerVersionsOfDotNet()
+
+    for fsxFile in FindFsxFiles FsxHelper.RootDir do
+        Process.Execute(
+            { Command = "dotnet"; Arguments = sprintf "fsxc %s" fsxFile.FullName },
+            Echo.All
+        ).UnwrapDefault() |> ignore<string>
+
+#endif
+>>>>>>> origin/stable
 
 let BuildSolutionOrProject
     (buildToolAndBuildArg: string*string)
@@ -369,6 +422,7 @@ let MakeCheckCommand (commandName: string) =
         Console.Error.WriteLine (sprintf "%s not found, please install it first" commandName)
         Environment.Exit 1
 
+<<<<<<< HEAD
 let GetPathToFrontend (frontend: FrontendApp) (binaryConfig: BinaryConfig): DirectoryInfo*FileInfo =
     let frontendProjName = frontend.GetProjectName()
     let dir =
@@ -380,6 +434,14 @@ let GetPathToFrontend (frontend: FrontendApp) (binaryConfig: BinaryConfig): Dire
             binaryConfig.ToString()
 #if !LEGACY_FRAMEWORK
             , "net6.0"
+=======
+let GetPathToFrontendBinariesDir (binaryConfig: BinaryConfig) =
+#if LEGACY_FRAMEWORK
+    Path.Combine (FsxHelper.RootDir.FullName, "src", DEFAULT_FRONTEND, "bin", binaryConfig.ToString())
+#else
+    Path.Combine (FsxHelper.RootDir.FullName, "src", DEFAULT_FRONTEND, "bin", binaryConfig.ToString(), 
+                  sprintf "net%s" DOTNET_VERSION)
+>>>>>>> origin/stable
 #endif
         ) |> DirectoryInfo
 
@@ -447,6 +509,9 @@ match maybeTarget with
     MakeAll None |> ignore
 
 | Some("release") ->
+#if !LEGACY_FRAMEWORK
+    BuildScripts()
+#endif
     JustBuild BinaryConfig.Release None
         |> ignore
 
@@ -512,6 +577,9 @@ match maybeTarget with
             testProjectName,
             testProjectName + ".fsproj"
         ) |> FileInfo
+
+    // somehow sometimes the binary is seen by NUnit as 6.0, while we already have a .NET8.0 (or newer) runtime
+    AllowUsingNewerVersionsOfDotNet()
 #else
     // so that we get file names in stack traces
     Environment.SetEnvironmentVariable("MONO_ENV_OPTIONS", "--debug")
@@ -617,14 +685,31 @@ match maybeTarget with
     Unix.ChangeMode(finalLauncherScriptInDestDir, "+x", false)
 
 | Some("run") ->
+<<<<<<< HEAD
     let frontend,buildConfig = MakeAll None
     RunFrontend frontend buildConfig None
+=======
+    let buildConfig = MakeAll None
+
+#if !LEGACY_FRAMEWORK
+    AllowUsingNewerVersionsOfDotNet()
+#endif
+    RunFrontend buildConfig None
+>>>>>>> origin/stable
         |> ignore
 
 | Some "update-servers" ->
     let _,buildConfig = MakeAll None
     Directory.SetCurrentDirectory (GetPathToBackend())
+<<<<<<< HEAD
     let proc1 = RunFrontend FrontendApp.Console buildConfig (Some "--update-servers-file")
+=======
+
+#if !LEGACY_FRAMEWORK
+    AllowUsingNewerVersionsOfDotNet()
+#endif
+    let proc1 = RunFrontend buildConfig (Some "--update-servers-file")
+>>>>>>> origin/stable
     if proc1.ExitCode <> 0 then
         Environment.Exit proc1.ExitCode
     else
@@ -641,7 +726,7 @@ match maybeTarget with
     if not FsxHelper.NugetExe.Exists then
         MakeAll None |> ignore
 
-    let microsoftBuildLibVersion = "16.11.0"
+    let microsoftBuildLibVersion = "17.3.0"
     let pkgOutputDir = FsxHelper.NugetScriptsPackagesDir()
     Network.InstallNugetPackage
         FsxHelper.NugetExe

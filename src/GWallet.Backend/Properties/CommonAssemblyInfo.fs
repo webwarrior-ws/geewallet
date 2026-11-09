@@ -18,11 +18,19 @@ open System.Reflection
 // by using the '*' as shown below:
 // [<assembly: AssemblyVersion("1.0.*")>]
 
+<<<<<<< HEAD
 [<assembly: AssemblyVersion("0.7.445.0")>]
 [<assembly: AssemblyFileVersion("0.7.445.0")>]
 
 // this one below maps to Product Version in theory
 [<assembly: AssemblyInformationalVersion("0.7.445.0")>]
+=======
+[<assembly: AssemblyVersion("0.80.447.0")>]
+[<assembly: AssemblyFileVersion("0.80.447.0")>]
+
+// this one below maps to Product Version in theory
+[<assembly: AssemblyInformationalVersion("0.80.447.0")>]
+>>>>>>> origin/stable
 
 do
     ()
