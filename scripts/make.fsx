@@ -182,10 +182,7 @@ let PrintNugetVersion () =
             Console.WriteLine()
             Console.Out.Flush()
             failwith "nuget process' output contained errors ^"
-<<<<<<< HEAD
-=======
-#else
-
+#if !LEGACY_FRAMEWORK
 let BuildScripts() =
     let rec FindFsxFiles (dir: DirectoryInfo): seq<FileInfo> =
         seq {
@@ -223,7 +220,6 @@ let BuildScripts() =
         ).UnwrapDefault() |> ignore<string>
 
 #endif
->>>>>>> origin/stable
 
 let BuildSolutionOrProject
     (buildToolAndBuildArg: string*string)
@@ -422,7 +418,6 @@ let MakeCheckCommand (commandName: string) =
         Console.Error.WriteLine (sprintf "%s not found, please install it first" commandName)
         Environment.Exit 1
 
-<<<<<<< HEAD
 let GetPathToFrontend (frontend: FrontendApp) (binaryConfig: BinaryConfig): DirectoryInfo*FileInfo =
     let frontendProjName = frontend.GetProjectName()
     let dir =
@@ -433,15 +428,7 @@ let GetPathToFrontend (frontend: FrontendApp) (binaryConfig: BinaryConfig): Dire
             "bin",
             binaryConfig.ToString()
 #if !LEGACY_FRAMEWORK
-            , "net6.0"
-=======
-let GetPathToFrontendBinariesDir (binaryConfig: BinaryConfig) =
-#if LEGACY_FRAMEWORK
-    Path.Combine (FsxHelper.RootDir.FullName, "src", DEFAULT_FRONTEND, "bin", binaryConfig.ToString())
-#else
-    Path.Combine (FsxHelper.RootDir.FullName, "src", DEFAULT_FRONTEND, "bin", binaryConfig.ToString(), 
-                  sprintf "net%s" DOTNET_VERSION)
->>>>>>> origin/stable
+            , sprintf "net%s" DOTNET_VERSION
 #endif
         ) |> DirectoryInfo
 
@@ -685,31 +672,22 @@ match maybeTarget with
     Unix.ChangeMode(finalLauncherScriptInDestDir, "+x", false)
 
 | Some("run") ->
-<<<<<<< HEAD
     let frontend,buildConfig = MakeAll None
-    RunFrontend frontend buildConfig None
-=======
-    let buildConfig = MakeAll None
 
 #if !LEGACY_FRAMEWORK
     AllowUsingNewerVersionsOfDotNet()
 #endif
-    RunFrontend buildConfig None
->>>>>>> origin/stable
+    RunFrontend frontend buildConfig None
         |> ignore
 
 | Some "update-servers" ->
     let _,buildConfig = MakeAll None
     Directory.SetCurrentDirectory (GetPathToBackend())
-<<<<<<< HEAD
-    let proc1 = RunFrontend FrontendApp.Console buildConfig (Some "--update-servers-file")
-=======
 
 #if !LEGACY_FRAMEWORK
     AllowUsingNewerVersionsOfDotNet()
 #endif
-    let proc1 = RunFrontend buildConfig (Some "--update-servers-file")
->>>>>>> origin/stable
+    let proc1 = RunFrontend FrontendApp.Console buildConfig (Some "--update-servers-file")
     if proc1.ExitCode <> 0 then
         Environment.Exit proc1.ExitCode
     else

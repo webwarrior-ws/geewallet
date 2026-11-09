@@ -16,9 +16,6 @@ module Config =
     [<Literal>]
     let AppName = "geewallet"
 
-    [<Literal>]
-    let AppName = "geewallet"
-
     // we might want to test with TestNet at some point, so this below is the key:
     // (but we would need to get a seed list of testnet electrum servers, and testnet(/ropsten/rinkeby?), first...)
     let BitcoinNet = NBitcoin.Network.Main
@@ -92,14 +89,11 @@ module Config =
 
     let internal NUMBER_OF_RETRIES_TO_SAME_SERVERS = 3u
 
-<<<<<<< HEAD
-    let private isWindows =
-        Path.DirectorySeparatorChar = '\\'
-
-    let internal GetConfigDirForThisProgram() =
+    // still used by Mobile & Windows for now
+    let private GetLegacyConfigDirForThisProgram() =
         let configPath =
 (* NOTE: we used to support UWP via the Xamarin.Essentials code below, but MAUI is a higher priority than resurrecting UWP now:
-            if (not isWindows) || Xamarin.Essentials.DeviceInfo.Platform <> Xamarin.Essentials.DevicePlatform.UWP then
+            if (not (IsWindowsPlatform())) || Xamarin.Essentials.DeviceInfo.Platform <> Xamarin.Essentials.DevicePlatform.UWP then
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
             else //UWP
                 Xamarin.Essentials.FileSystem.AppDataDirectory
@@ -107,11 +101,6 @@ module Config =
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
 
         // TODO: rename to "geewallet", following a similar approach as DAI->SAI rename
-=======
-    // still used by Mobile & Windows for now
-    let private GetLegacyConfigDirForThisProgram() =
-        let configPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
->>>>>>> origin/stable
         let configDir = DirectoryInfo(Path.Combine(configPath, "gwallet"))
         configDir
 

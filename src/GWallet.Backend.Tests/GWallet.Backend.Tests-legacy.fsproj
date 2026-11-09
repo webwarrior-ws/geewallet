@@ -75,12 +75,8 @@
     <EmbeddedResource Include="data\customException.json" />
     <EmbeddedResource Include="data\customFSharpException.json" />
     <EmbeddedResource Include="data\fullException.json" />
-<<<<<<< HEAD
-    <Compile Include="ElectrumIntegrationTests.fs" />
-=======
     <Compile Include="Config.fs" />
     <Compile Include="ElectrumServer.fs" />
->>>>>>> origin/stable
     <Compile Include="WarpWallet.fs" />
     <Compile Include="CompoundBalanceCaching.fs" />
     <Compile Include="Formatting.fs" />

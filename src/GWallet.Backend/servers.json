@@ -3946,11 +3946,7 @@
     "ETC": [
       {
         "ServerInfo": {
-<<<<<<< HEAD
           "NetworkPath": "rpc.etcinscribe.com",
-=======
-          "NetworkPath": "ethereum-classic-mainnet.gateway.tatum.io",
->>>>>>> origin/stable
           "ConnectionType": {
             "Encrypted": true,
             "Protocol": {
@@ -3958,7 +3954,6 @@
             }
           }
         },
-<<<<<<< HEAD
         "CommunicationHistory": {
           "Case": "Some",
           "Fields": [
@@ -3973,7 +3968,17 @@
             }
           ]
         }
-=======
+      },
+      {
+        "ServerInfo": {
+          "NetworkPath": "ethereum-classic-mainnet.gateway.tatum.io",
+          "ConnectionType": {
+            "Encrypted": true,
+            "Protocol": {
+              "Case": "Http"
+            }
+          }
+        },
         "CommunicationHistory": null
       },
       {
@@ -3987,7 +3992,6 @@
           }
         },
         "CommunicationHistory": null
->>>>>>> origin/stable
       },
       {
         "ServerInfo": {
